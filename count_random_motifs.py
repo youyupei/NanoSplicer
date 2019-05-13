@@ -14,14 +14,12 @@ if len(arg) == 1:
 '''
 
 
-def count_in_file(motif, filename):
-    occurence_overlap = 0
-    occurence_no_overlap = 0
+def count_in_file(motif, filename, overlapped = False):
+    occurence = 0
     with open(filename,'r') as f:
         for line in f:
-            occurence_overlap += len(re.findall(motif, line, overlapped = True))
-            occurence_no_overlap += len(re.findall(motif, line, overlapped = False))
-    return occurence_overlap, occurence_no_overlap
+            occurence += len(re.findall(motif, line, overlapped = overlapped))
+    return occurence
 
 
 def main(): 
