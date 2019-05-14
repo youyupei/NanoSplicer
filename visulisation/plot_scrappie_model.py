@@ -57,3 +57,5 @@ def main():
 
         fig.savefig(argv[2]+key+'.png')
 
+if __name__ = "__main__":
+    main()
