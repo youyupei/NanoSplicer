@@ -1,6 +1,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
 
 
 
@@ -39,7 +40,7 @@ def read_synth_model(filename):
 def main():
     argv = sys.argv
     if len(argv) < 3:
-        exit("Usage: python {} <.model file> <save fig as>.format(argv[0])")
+        exit("Usage: python {} <.model file> <save fig as>".format(argv[0]))
     filename = argv[1]
 
     signal_dic = read_synth_model(filename)
@@ -57,5 +58,5 @@ def main():
 
         fig.savefig(argv[2]+key+'.png')
 
-if __name__ = "__main__":
+if __name__ == "__main__":
     main()
