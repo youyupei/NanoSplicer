@@ -76,13 +76,19 @@ def reverse_complement(seq):
     letters = [complement[base] for base in seq]
     return ''.join(letters)[::-1]
 
-def get_junction_signal_by_pos(fast5, junction_pos, window = 20):
+def get_junction_signal_by_pos(fast5, junction_pos = None, window = 20, start_pos = None , end_pos = None):
 
     '''
 	fast5: signal file with tombo output (a transcript reference needed)
 	junction_pos: 0-based position of the splicing site of each transcript reference
 	window: signals assigned to a window around the junction_pos will be fetched.
 	'''
+    if start_pos and start_pos:
+        junction_bases_start, junction_bases_end = start_pos, end_pos
+    elif junction_pos and window:
+        junction_bases_start = junction_pos - int(np.floor(window/2))
+        junction_bases_end = junction_pos + int(np.ceil(window/2))
+
     with h5py.File(fast5, 'r') as h5_f:
         path = "Analyses/"
         subpath = list(h5_f[path].keys())
@@ -98,19 +104,20 @@ def get_junction_signal_by_pos(fast5, junction_pos, window = 20):
         strand = h5_f[path]["Alignment"].attrs['mapped_strand']
         Events = h5_f[path]["Events"]
         read_start_rel_to_raw = Events.attrs['read_start_rel_to_raw']
-        relative_junction_pos = junction_pos - mapped_start
+        
+        #from transcript related pos to read specific pos
+        junction_bases_start -= mapped_start
+        junction_bases_end -= mapped_start
 
-        junction_bases_start = relative_junction_pos - int(np.floor(window/2))
-        junction_bases_end = relative_junction_pos + int(np.ceil(window/2))
         if junction_bases_start < 0:
-            print("Warning: junction pos is to close to the start of the read,\
-                    the window start at postion 0!")
+            print("Warning: Read discarded!!junction pos is to close to the start of the mapped region")
+            return 0
             junction_bases_start = 0
             junction_bases_end = window
 
         if junction_bases_end > mapped_end - mapped_start:
-            print("Warning: junction pos is to close to the end of the read,\
-                        the window end at last postion!")
+            print("Warning: Read discarded!!junction pos is to close to the end of the mapped region")
+            return 0
             junction_bases_end = mapped_end - mapped_start
             junction_bases_start = mapped_end - mapped_start - window
         
@@ -132,3 +139,35 @@ def get_junction_signal_by_pos(fast5, junction_pos, window = 20):
     print("Corresponding signal start and end:")
     print(junction_signal_start, junction_signal_end)
     return read_raw_signal(fast5, junction_signal_start, junction_signal_end)
+
+
+def get_mapped_info_from_fast5(fast5,window = 20):
+    """ extract:
+            mapped_start
+            mapped_end
+            mapped_strand
+            as dist from the tombo processed fast5
+    """
+    
+    mapping_info = {}
+    with h5py.File(fast5, 'r') as h5_f:
+        path = "Analyses/"
+        subpath = list(h5_f[path].keys())
+        for i in subpath:
+            if "RawGenomeCorrected" in i:
+                path = path + i +'/BaseCalled_template/'
+        
+        mapped_start = h5_f[path]["Alignment"].attrs['mapped_start']
+        mapped_end = h5_f[path]["Alignment"].attrs['mapped_end']
+        assert mapped_end - mapped_start > window,\
+                                "window size larger than the read"
+
+        strand = h5_f[path]["Alignment"].attrs['mapped_strand']
+
+        
+        mapping_info["start"]=mapped_start
+        mapping_info["end"]=mapped_end
+        mapping_info["strand"]=strand
+    
+    return mapping_info
+

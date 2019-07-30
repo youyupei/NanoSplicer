@@ -8,9 +8,7 @@ import scrappy
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/..")
 import helper
-from dtw import dtw_local_alignment
-
-
+from dtw_2 import dtw_local_alignment
 
 def sequence_to_squiggle(seq):
     '''input:
@@ -140,7 +138,7 @@ def main():
                             t_position, window)
 
     # Normalisation
-    signal = helper.normalization(signal,'median_shift')
+    signal = helper.normalization(signal,"z_score") # "median_shift" or "z_score"
 
     model_dic = expect_squiggle_dict(sequence, read_from_fasta, read_from_model)
     dtw_long = signal
@@ -148,10 +146,10 @@ def main():
     for key in model_dic.keys():
 
         dtw_short = np.array(model_dic[key])
-        dtw_short[:,0] = helper.normalization(dtw_short[:,0], 'median_shift')
+        dtw_short[:,0] = helper.normalization(dtw_short[:,0], "z_score")
         dtw_short[:,1] = dtw_short[:,1]/sqrt(np.std(dtw_short[:,0]))
 
-        print("dtw_short")
+        #print("dtw_short")
         dtw_short = np.array(dtw_short)
         print("Input queried signal: " + '\t'.join([str(i) for i in dtw_long]))
 
@@ -161,17 +159,21 @@ def main():
 
         timer_start = timeit.default_timer()
         
+        
+        #dtw_long = np.repeat(dtw_long,3)
+        #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
         #path , score = dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")
         #path , score = dtw_local_alignment(dtw_long, dtw_short, dist_type = "log_likelihood")
-        
         path , score = dtw_local_alignment(dtw_long, dtw_short, dist_type = 'manhattan')
+
+
         timer_stop = timeit.default_timer()
         print("\n\nDTW finished, runtime: {} sec".format(timer_stop - timer_start))
         print("\n\nAlignment distance: {}".format(score))
         plt.figure(figsize=(10,7))
         plt.plot(dtw_long)
         path = np.array(path[::-1])
-        print("\n\n\nBest path:\n{}".format(np.array(path)))
+        print("\n\n\nBest path start and end:\n{} {}".format(np.array(path)[0,1],np.array(path)[-1,1]))
         print("\n\n\nBest path length:\n{}".format(len(np.array(path))))
         
         plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0],'g')
@@ -181,7 +183,9 @@ def main():
         plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
                                         - dtw_short[[np.array(path)[:,0]-1]][:,1],'g--')
 
-        plt.title(figure_name+"_"+key+"   Distance: {}".format(score))
+        plt.title(figure_name+"_"+key+\
+        "\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(score,\
+                    len(np.array(path)),score/len(np.array(path))),fontsize=20)
         plt.savefig(figure_name+"_"+key+".png")
 
 if __name__ == "__main__":

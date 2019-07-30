@@ -83,42 +83,49 @@ def dtw_local_alignment(long, short, radius = None, dist_type = None, upper = np
     
     short_len = len(short)
     long_len = len(long)
-    cum_matrix = np.zeros((short_len + 1, long_len + 1))
-    cum_matrix[1:, 0] = np.inf
+    mean_matrix = np.zeros((short_len + 1, long_len + 1, 2))
+    mean_matrix[1:, 0, 0] = np.inf
     
     pre_step_matrix = np.zeros((short_len + 1, long_len + 1), dtype = int)
     '''
     matrix for recording the best path. Each of the cells contains one of three
-    possible integer: 0 ,1 ,2 indecating the corresponding value in cum_matrix
-    (cum_matrix[i,j]) came from the cum_matrix[i-1,j], cum_matrix[i - 1,j - 1],
-     and cum_matrix[i, j - 1] respectively.
+    possible integer: 0 ,1 ,2 indecating the corresponding value in mean_matrix
+    (mean_matrix[i,j]) came from the mean_matrix[i-1,j], mean_matrix[i - 1,j - 1],
+     and mean_matrix[i, j - 1] respectively.
     '''
     
     for i in range(1, short_len + 1):
         for j in range(1, long_len + 1):
 
-            pre_values = (cum_matrix[i-1,j], 
-                        cum_matrix[i - 1,j - 1],
-                        cum_matrix[i, j - 1])
+            pre_values = np.array((mean_matrix[i-1,j] , 
+                        mean_matrix[i - 1,j - 1],
+                        mean_matrix[i, j - 1]))
             
             
             #pre_step_matrix[i, j] = np.argmin(pre_values)
-            pre_step_matrix[i, j] = np.random.choice(\
-                            np.where(pre_values==min(pre_values))[0])
+            min_index = np.random.choice(\
+                            np.where(pre_values[:,0]==min(pre_values[:,0]))[0])
             
-            cum_matrix[i, j] = min(pre_values) +\
-                        cost(long[j -1], *short[i - 1], dist_type = dist_type)
-    best_score = min(cum_matrix[-1,:])
+            pre_step_matrix[i, j] = min_index
+            pre_mean ,pre_p_length = pre_values[min_index]
+
+            
+            mean_matrix[i, j] = (pre_mean * pre_p_length +\
+                cost(long[j -1], *short[i - 1], dist_type = dist_type))/\
+                (pre_p_length + 1), pre_p_length + 1
+
+
+    best_score = min(mean_matrix[-1,:,0])
     best_path = []
   
     traced_short_index = short_len
-    #traced_long_index = np.argmin(cum_matrix[-1:])
+    #traced_long_index = np.argmin(mean_matrix[-1:])
     traced_long_index = np.random.choice(\
-                np.where(cum_matrix[-1,:]==min(cum_matrix[-1,:]))[0])
+                np.where(mean_matrix[-1,:,0]==min(mean_matrix[-1,:,0]))[0])
     
-
-    #plt.plot(cum_matrix[-1:][0])
-    #plt.savefig('path_score.png')
+    if False:
+        plt.plot(mean_matrix[-1, :, 0])
+        plt.savefig('path_score.png')
 
     while True:
         best_path.append([traced_short_index, traced_long_index])
@@ -140,12 +147,12 @@ def main():
     short = np.array([[1,4],[2,9],[3,1],[4,1],[5,2]])
     long = np.array([1,1,1,3,4,5,7,5,4,5])
 
-
-    path , score = dtw_local_alignment(long, short)
-    plt.plot(long)
-    plt.plot(np.array(path)[:,1]-1, short[[np.array(path)[:,0]-1]][:,0])
-    plt.savefig('test.png')
-    print(path)
+    if False:
+        path , score = dtw_local_alignment(long, short)
+        plt.plot(long)
+        plt.plot(np.array(path)[:,1]-1, short[[np.array(path)[:,0]-1]][:,0])
+        plt.savefig('test.png')
+        print(path)
 if __name__ == '__main__':
     main()
 
