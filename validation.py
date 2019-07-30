@@ -8,7 +8,7 @@ import scrappy
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import helper
-from dtw_2 import dtw_local_alignment
+from dtw import dtw_local_alignment
 
 
 
@@ -40,18 +40,29 @@ def expect_squiggle_dict(seqs=None, read_from_fasta = None, read_from_model = No
         
     return expect_squiggle_dic
 
+def parse_candidate_file(filename):
+    class candidate:
+        def __init__(self, sequences, start, end):
+            self.sequences = sequences
+            self.start = int(start)
+            self.end = int(end)
+    with open(filename, 'r') as f:
+        candidate_list = []
+        for line in f:
+            line = line.strip().split(',')
+            try:
+                candidate_list.append(candidate(line[:-2], line[-2], line[-1]))
+            except:
+                exit()
+    return candidate_list
 
 def main():
 
     def print_help():
         print("\n\nUsage: python {} [OPTIONS] <fast5 filename>".format(argv[0]))
         print("Options:\n\tIndexing:")
-        print('\t\t-s INT\tstart point of the signal')
-        print('\t\t-e INT\tend point of the signal')
+        print('\t\t-c INT\tcandidate file name')
         print('\t\t-o INT\toutput csv name')
-        print('\t\t-p INT\tbase position to be fetched')
-        print('\t\t-w INT\twindow size around the -p, default 20')
-        print("\t\t-q STR\tqueried candidates, seperate by comma")
         
 
         return None
@@ -63,17 +74,17 @@ def main():
         exit()
     
     try: 
-        opts, args = getopt.getopt(argv[1:],"hs:e:o:m:f:q:p:w:",
+        opts, args = getopt.getopt(argv[1:],"hs:e:o:m:f:q:p:w:c:",
                     ["help=","start=","end=","output_figure=",
-                    "model=","fasta=","sequence=", "position=", "window="])
+                    "model=","fasta=","sequence=", "position=", "window=","candidate_file="])
     
     except getopt.GetoptError:
         print_help()
         exit()
     
     
-    start_pos, end_pos,read_from_model,read_from_fasta,sequence \
-        = None, None, None, None, None
+    start_pos, end_pos,read_from_model,read_from_fasta,sequence,candidate_file \
+        = None, None, None, None, None, None
 
     t_position = None
     window = 20
@@ -100,105 +111,101 @@ def main():
             t_position = int(arg)
         elif opt in ("-w", "--window"):
             window = int(arg)
+        elif opt in ("-c", "--candidate_file"):
+           candidate_file = arg
     
     fast5_filename = args[0]
 
-    outf = open(output_file,'w')
+
     
+    outf = open(output_file,'w')
+    '''
     outf.write("read id")
     for i in range(len(sequence)):
         outf.write(",z_score{},log_likelihood{},manhattan{}".format(i+1,i+1,i+1))
     
     outf.write('\n'+ fast5_filename)
-
-
-
-
-    # get signal
-    if start_pos and end_pos:
-        signal = helper.read_raw_signal(fast5_filename, start_pos, end_pos)
-    elif t_position:
-        signal = helper.get_junction_signal_by_pos(fast5_filename, 
-                       t_position, window)
+    '''
+    if candidate_file:
+        candidates = parse_candidate_file(candidate_file)
     
-    if not signal:
-        for i in range(len(sequence)):
-            outf.write(",NA,NA,NA")
-        print("read discarded")
-        exit(0)
-
-
-
-
-    # take reverse compliment seq if nesseccary
     strand = helper.get_mapped_info_from_fast5(fast5_filename)["strand"]
-    if strand == "-":
-        sequence = [helper.reverse_complement(s) for s in sequence]
-
-    # Normalisation
-    signal = helper.normalization(signal,"z_score") # "median_shift" or "z_score"
-
-    model_dic = expect_squiggle_dict(sequence, read_from_fasta, read_from_model)
-
-    
-    dtw_long = signal
-
-
-    #print(sequence, model_dic)
-    
-    
-    
-
-    for key in sequence:
-
-        dtw_short = np.array(model_dic[key])
-        dtw_short[:,0] = helper.normalization(dtw_short[:,0], "z_score")
-        dtw_short[:,1] = dtw_short[:,1]/sqrt(np.std(dtw_short[:,0]))
-
-        #print("dtw_short")
-        dtw_short = np.array(dtw_short)
-        #print("Input queried signal: " + '\t'.join([str(i) for i in dtw_long]))
-
-        #print("\n\n\nInput model: " + '\t'.join([str(i) for i in dtw_short]))
-
-        #print("\n\n\nRunning DTW...")
-
-        timer_start = timeit.default_timer()
-        #dtw_long = np.repeat(dtw_long,3)
-        #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
+    for candidate in candidates:
+        outf.write(fast5_filename + ',' + strand + ',')
         
-        path1 , score1 = dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")
-        path2 , score2 = dtw_local_alignment(dtw_long, dtw_short, dist_type = "log_likelihood")   
-        path3 , score3 = dtw_local_alignment(dtw_long, dtw_short, dist_type = 'manhattan')
+        # get signal
+        signal = helper.get_junction_signal_by_pos(\
+            fast5 = fast5_filename, start_pos = candidate.start , end_pos = candidate.end)
         
-        outf.write(',{},{},{}'.format(score1/len(path1),score2/len(path2),score3/len(path3)))
+        if not signal:
+            for i in range(len(candidate.sequences)):
+                outf.write(",NA,NA,NA")
+            print("read discarded")
+            exit(0)
+
+        # take reverse compliment seq if nesseccary
         
-        timer_stop = timeit.default_timer()
+        if strand == "-":
+            candidate.sequences = [helper.reverse_complement(s) for s in candidate.sequences]
 
-        runtime = timer_stop - timer_start
+        # Normalisation
+        signal = helper.normalization(signal,"z_score") # "median_shift" or "z_score"
 
-        if False:
-            #print("\n\nDTW finished, runtime: {} sec".format(timer_stop - timer_start))
-            plt.figure(figsize=(10,7))
-            plt.plot(dtw_long)
+        model_dic = expect_squiggle_dict(candidate.sequences, read_from_fasta, read_from_model)
+        
+        dtw_long = signal
+
+        for key in candidate.sequences:
+
+            dtw_short = np.array(model_dic[key])
+            dtw_short[:,0] = helper.normalization(dtw_short[:,0], "z_score")
+            dtw_short[:,1] = dtw_short[:,1]/sqrt(np.std(dtw_short[:,0]))
+
+            #print("dtw_short")
+            dtw_short = np.array(dtw_short)
+            #print("Input queried signal: " + '\t'.join([str(i) for i in dtw_long]))
+
+            #print("\n\n\nInput model: " + '\t'.join([str(i) for i in dtw_short]))
+
+            #print("\n\n\nRunning DTW...")
+
+            timer_start = timeit.default_timer()
+            #dtw_long = np.repeat(dtw_long,3)
+            #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
             
-            for score, path in (score1, path1), (score2, path2),(score3, path3):
-                path = np.array(path[::-1])
-                #print("\n\n\nBest path start and end:\n{} {}".format(np.array(path)[0,1],np.array(path)[-1,1]))
-                #print("\n\n\nBest path length:\n{}".format(len(np.array(path))))
+            path1 , score1 = dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")
+            path2 , score2 = dtw_local_alignment(dtw_long, dtw_short, dist_type = "log_likelihood")   
+            path3 , score3 = dtw_local_alignment(dtw_long, dtw_short, dist_type = 'manhattan')
+            
+            outf.write(',{},{},{}'.format(score1/len(path1),score2/len(path2),score3/len(path3)))
+            
+            timer_stop = timeit.default_timer()
+
+            runtime = timer_stop - timer_start
+
+            if False:
+                #print("\n\nDTW finished, runtime: {} sec".format(timer_stop - timer_start))
+                plt.figure(figsize=(10,7))
+                plt.plot(dtw_long)
                 
-                plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0],'g')
-                plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
-                                                + dtw_short[[np.array(path)[:,0]-1]][:,1],'g--')
+                for score, path in (score1, path1), (score2, path2),(score3, path3):
+                    path = np.array(path[::-1])
+                    #print("\n\n\nBest path start and end:\n{} {}".format(np.array(path)[0,1],np.array(path)[-1,1]))
+                    #print("\n\n\nBest path length:\n{}".format(len(np.array(path))))
+                    
+                    plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0],'g')
+                    plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
+                                                    + dtw_short[[np.array(path)[:,0]-1]][:,1],'g--')
 
-                plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
-                                                - dtw_short[[np.array(path)[:,0]-1]][:,1],'g--')
+                    plt.plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
+                                                    - dtw_short[[np.array(path)[:,0]-1]][:,1],'g--')
 
-            plt.title(figure_name+"_"+key+\
-            "\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(score,\
-                        len(np.array(path)),score/len(np.array(path))),fontsize=20)
-        
-            plt.savefig(fast5_filename+"_"+key+".png")
+                plt.title(figure_name+"_"+key+\
+                "\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(score,\
+                            len(np.array(path)),score/len(np.array(path))),fontsize=20)
+            
+                plt.savefig(fast5_filename+"_"+key+".png")
+        outf.write('\n')
                 
 
 
