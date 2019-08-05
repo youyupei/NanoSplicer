@@ -113,7 +113,7 @@ def search_potential_canonical_sites(splice_site, window, genome_ref, strand):
     return list(itertools.product(list0,list1))
 
 
-def count_splice_site_supports(bedfile, strand):
+def count_splice_site_supports(bedfile, ref_trans_strand):
     '''
     input:
         bedfile converted from bam/sam
@@ -126,9 +126,9 @@ def count_splice_site_supports(bedfile, strand):
     count_intron_mapping = defaultdict(int)
     with open(bedfile, "r") as bf:
         for line in bf:
-            name, true_strand, splice_sites, junction_pos = ReadBedLine(line)
-            if strand != true_strand:
-                continue
+            name, mapped_strand, splice_sites, junction_pos = ReadBedLine(line)
+            #if ref_trans_strand != mapped_strand:
+            #    continue
             for site in splice_sites:
                 count_intron_start[site[0]] += 1
                 count_intron_end[site[1]] += 1
@@ -159,10 +159,11 @@ def genome_pos_to_transcript_pos(genome_pos, bedline):
     return transcript_pos
 
 class candidate_class:
-        def __init__(self, sequences=None, start=-1, end = -1):
+        def __init__(self, sequences=None, start=-1, end = -1, num_of_correct_supports = 0):
             self.sequences = sequences
             self.start = int(start)
             self.end = int(end)
+            self.num_of_correct_supports = num_of_correct_supports
  
 
 
@@ -170,7 +171,7 @@ class candidate_class:
 def main():
     args = sys.argv
     if len(args) < 2:
-        print("\n\nUsage: python {} <ref filename> <bed filename from bam>".format(argv[0]))
+        print("\n\nUsage: python3 {} <ref filename> <bed filename from bam>".format(argv[0]))
         exit()
     
     #gtfbedline = sys.stdin
@@ -190,10 +191,9 @@ def main():
     candidates = []
     for site in annotated_sites:
         candidate_splice_site_list = [site]
-
         # best supported sites:
         search_win = 20
-        flank_size = 20
+        flank_size = 10 #each side
         accept_thres = 3
 
         best_supported_count = accept_thres
@@ -224,7 +224,7 @@ def main():
 
         # generate candidate
         
-        candidate = candidate_class()
+        candidate = candidate_class(num_of_correct_supports = count_intron_mapping[site])
         candidate.start = min([x for x,y in candidate_splice_site_list]) - flank_size
         candidate.end = max([y for x,y in candidate_splice_site_list]) + flank_size
 
@@ -244,9 +244,17 @@ def main():
         
         candidates.append(candidate)
 
-    for candidate in candidates:
-        print(','.join(candidate.sequences) + ",{},{}".format( candidate.start,\
-            candidate.end))
+    if strand  == '+':
+
+        for candidate in candidates:
+            print(','.join(candidate.sequences) + ",{},{},{}".format( candidate.start,\
+                candidate.end,candidate.num_of_correct_supports))
+    
+    elif strand == '-':
+        for candidate in candidates:
+            print(','.join([helper.reverse_complement(s) for s in candidate.sequences]) + ",{},{},{}".format( -candidate.start,\
+                -candidate.end,candidate.num_of_correct_supports))
+
     
     return None
 

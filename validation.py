@@ -51,7 +51,7 @@ def parse_candidate_file(filename):
         for line in f:
             line = line.strip().split(',')
             try:
-                candidate_list.append(candidate(line[:-2], line[-2], line[-1]))
+                candidate_list.append(candidate(line[:-3], line[-3], line[-2]))
             except:
                 exit()
     return candidate_list
@@ -140,8 +140,9 @@ def main():
         if not signal:
             for i in range(len(candidate.sequences)):
                 outf.write(",NA,NA,NA")
+            outf.write("\n")
             print("read discarded")
-            exit(0)
+            continue
 
         # take reverse compliment seq if nesseccary
         
@@ -184,6 +185,7 @@ def main():
             runtime = timer_stop - timer_start
 
             if False:
+                figure_name = "test"
                 #print("\n\nDTW finished, runtime: {} sec".format(timer_stop - timer_start))
                 plt.figure(figsize=(10,7))
                 plt.plot(dtw_long)

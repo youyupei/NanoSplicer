@@ -90,12 +90,22 @@ def get_junction_signal_by_pos(fast5, junction_pos = None, window = 20, start_po
         junction_bases_end = junction_pos + int(np.ceil(window/2))
 
     with h5py.File(fast5, 'r') as h5_f:
+        
         path = "Analyses/"
+       
         subpath = list(h5_f[path].keys())
         for i in subpath:
             if "RawGenomeCorrected" in i:
                 path = path + i +'/BaseCalled_template/'
-        
+
+
+        try:
+            h5_f[path]["Alignment"]
+        except:
+            print("Alignment doesn't exist in fast5!!")
+            exit(0)  
+
+
         mapped_start = h5_f[path]["Alignment"].attrs['mapped_start']
         mapped_end = h5_f[path]["Alignment"].attrs['mapped_end']
         assert mapped_end - mapped_start > window,\
@@ -106,8 +116,17 @@ def get_junction_signal_by_pos(fast5, junction_pos = None, window = 20, start_po
         read_start_rel_to_raw = Events.attrs['read_start_rel_to_raw']
         
         #from transcript related pos to read specific pos
-        junction_bases_start -= mapped_start
-        junction_bases_end -= mapped_start
+
+        
+        if junction_bases_start >=0 and junction_bases_end >= 0:
+            junction_bases_start -= mapped_start
+            junction_bases_end -= mapped_start
+
+        # transcript ref from the reverse strand of genome ref    
+        elif junction_bases_start <=0 and junction_bases_end <= 0:
+            junction_bases_start = mapped_end - abs(end_pos)  - mapped_start
+            junction_bases_end = mapped_end - abs(start_pos) - mapped_start
+
 
         if junction_bases_start < 0:
             print("Warning: Read discarded!!junction pos is to close to the start of the mapped region")
@@ -152,10 +171,21 @@ def get_mapped_info_from_fast5(fast5,window = 20):
     mapping_info = {}
     with h5py.File(fast5, 'r') as h5_f:
         path = "Analyses/"
+        
+
+
+        
+        
         subpath = list(h5_f[path].keys())
         for i in subpath:
             if "RawGenomeCorrected" in i:
                 path = path + i +'/BaseCalled_template/'
+        
+        try:
+            h5_f[path]["Alignment"]
+        except:
+            print("Alignment doesn't exist in fast5!!")
+            exit(0)
         
         mapped_start = h5_f[path]["Alignment"].attrs['mapped_start']
         mapped_end = h5_f[path]["Alignment"].attrs['mapped_end']
