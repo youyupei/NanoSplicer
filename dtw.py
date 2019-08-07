@@ -134,7 +134,7 @@ def dtw_local_alignment(long, short, radius = None, dist_type = None, upper = np
             traced_long_index -= 1
     # best_path: 0-based coordinate on the (i+1)*(j+1) matrix
 
-    return best_path, best_score
+    return best_path[::-1], best_score
 
 def main():
     short = np.array([[1,4],[2,9],[3,1],[4,1],[5,2]])
