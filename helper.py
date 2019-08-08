@@ -68,7 +68,6 @@ def reverse_complement(seq):
     letters = [complement[base] for base in seq]
     return ''.join(letters)[::-1]
 
-
 # TOMBO related functions
 def get_junction_signal_by_pos(fast5, junction_pos = None, 
         window = 20, start_pos = None , end_pos = None):
