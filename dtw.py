@@ -3,8 +3,10 @@ apply dynamic time warping to 2 time series
 '''
 
 import numpy as np
+from numpy import exp, pi, sqrt, log
+
 import matplotlib.pyplot as plt
-from math import exp, pi, sqrt, log
+
 
 # require fastdtw to be installed 
 # "pip install fastdtw"
@@ -38,7 +40,7 @@ from math import exp, pi, sqrt, log
             list of indexes for the inputs x and y
 '''
 
-def cost(x, *y, dist_type = None, upper = upper):
+def cost(x, *y, dist_type = None, upper = np.inf):
     '''
     input:
         two float when dist_type = "manhattan"
@@ -55,28 +57,30 @@ def cost(x, *y, dist_type = None, upper = upper):
         diff = min(abs(a-b_mean), upper)
         z = diff/b_std
         return -(log(1/sqrt(2*pi)) - z**2/2)
+        #return 0.6931472+log(1+z**2)
+    
+
+    y_len = len(y)
+    if y_len not in (1,2):
+        exit("FATAL!: unexpected input in distance matrics.")
+    if dist_type == None:
+        dist_type = "manhattan" if y_len == 1 else "log_likelihood" 
+    if dist_type not in ("manhattan", "z_score", "log_likelihood"):
+        exit("FATAL: can't recognise the distance matrics ['manhattan', 'z_score', 'log_likelihood'],")
+
+    if dist_type == "manhattan":
+        return manhattan(x, y[0])
+
+    if dist_type == "z_score":
+        return z_score(x, y[0], y[1])
+
+    if dist_type == "log_likelihood":
+        return log_likelihood(x, y[0], y[1])
 
 
 def dtw_local_alignment_max_sum(long, short, radius = None, \
             dist_type = None, upper = np.inf):
 
-        y_len = len(y)
-        if y_len not in (1,2):
-            exit("FATAL!: unexpected input in distance matrics.")
-        if dist_type == None:
-            dist_type = "manhattan" if y_len == 1 else "log_likelihood" 
-        
-        if dist_type not in ("manhattan", "z_score", "log_likelihood"):
-            exit("FATAL: can't recognise the distance matrics ['manhattan', 'z_score', 'log_likelihood'],")
-
-        if dist_type == "manhattan":
-            return manhattan(x, y[0])
-
-        if dist_type == "z_score":
-            return z_score(x, y[0], y[1])
-
-        if dist_type == "log_likelihood":
-            return log_likelihood(x, y[0], y[1])
 
     
     short_len = len(short)
@@ -115,6 +119,7 @@ def dtw_local_alignment_max_sum(long, short, radius = None, \
                 np.where(cum_matrix[-1,:]==min(cum_matrix[-1,:]))[0])
     
 
+
     #plt.plot(cum_matrix[-1:][0])
     #plt.savefig('path_score.png')
 
@@ -131,31 +136,12 @@ def dtw_local_alignment_max_sum(long, short, radius = None, \
         if pre_step in (1, 2):
             traced_long_index -= 1
     # best_path: 0-based coordinate on the (i+1)*(j+1) matrix
+    best_path = np.array(best_path)
+    return best_path[::-1], best_score/len(best_path[::-1]),cum_matrix
 
-    return best_path[::-1], best_score
-
-    def dtw_local_alignment_max_mean(long, short, radius = None, dist_type = None, \
+def dtw_local_alignment_max_mean(long, short, radius = None, dist_type = None, \
          upper = np.inf):
 
-        y_len = len(y)
-        if y_len not in (1,2):
-            exit("FATAL!: unexpected input in distance matrics.")
-        if dist_type == None:
-            dist_type = "manhattan" if y_len == 1 else "log_likelihood" 
-        
-        if dist_type not in ("manhattan", "z_score", "log_likelihood"):
-            exit("FATAL: can't recognise the distance matrics ['manhattan', 'z_score', 'log_likelihood'],")
-
-        if dist_type == "manhattan":
-            return manhattan(x, y[0])
-
-        if dist_type == "z_score":
-            return z_score(x, y[0], y[1])
-
-        if dist_type == "log_likelihood":
-            return log_likelihood(x, y[0], y[1])
-
-    
     short_len = len(short)
     long_len = len(long)
     mean_matrix = np.zeros((short_len + 1, long_len + 1, 2))
@@ -216,7 +202,38 @@ def dtw_local_alignment_max_sum(long, short, radius = None, \
             traced_long_index -= 1
     # best_path: 0-based coordinate on the (i+1)*(j+1) matrix
 
-    return best_path[::-1], best_score
+    return best_path[::-1], best_score,mean_matrix[:,:,0]
+
+
+
+
+    best_score = min(mean_matrix[-1,:,0])
+    best_path = []
+  
+    traced_short_index = short_len
+    #traced_long_index = np.argmin(mean_matrix[-1:])
+    traced_long_index = np.random.choice(\
+                np.where(mean_matrix[-1,:,0]==min(mean_matrix[-1,:,0]))[0])
+    
+    if False:
+        plt.plot(mean_matrix[-1, :, 0])
+        plt.savefig('path_score.png')
+
+    while True:
+        best_path.append([traced_short_index, traced_long_index])
+        pre_step = pre_step_matrix[traced_short_index, traced_long_index]
+
+        if traced_short_index == 1:
+            break
+
+        if pre_step in (0, 1):
+            traced_short_index -= 1
+        
+        if pre_step in (1, 2):
+            traced_long_index -= 1
+    # best_path: 0-based coordinate on the (i+1)*(j+1) matrix
+
+    return best_path[::-1], best_score,mean_matrix[:,:,0]
 
 def main():
     short = np.array([[1,4],[2,9],[3,1],[4,1],[5,2]])
