@@ -14,7 +14,7 @@ Yupei You,
 Mike Clark*,
 Heejung Shim*
 
-# Author affiliations:
+## Author affiliations:
 School of Mathematics and Statistics and Melbourne Integrative Genomics, University of Melbourne, Melbourne, Australia
 Anatomy and Neuroscience, School of Biomedical Sciences, University of Melbourne, Melbourne, Australia
 School of Mathematics and Statistics and Melbourne Integrative Genomics, University of Melbourne, Melbourne, Australia
