@@ -13,6 +13,15 @@ import re
 from collections import defaultdict
 import helper
 
+
+# CONSTANT
+
+SEARCH_WIN = 20 # window size of candidate splicing site searching
+ACCEPT_THRES = 3 # minimum support  # best supported site:
+FLANK_SIZE = 15 # junction flanking in each side
+
+
+
 def ReadBedLine(bedline):
     """
     Take a bed12 format line as input and return the corresponding splicing
@@ -175,64 +184,65 @@ class candidate_class:
             self.end = int(end)
             self.num_of_correct_supports = num_of_correct_supports
 
-def main():
+
+def main(search_win = SEARCH_WIN, accept_thres =  ACCEPT_THRES,
+    flank_size = FLANK_SIZE):
+    
     args = sys.argv
     if len(args) < 2:
-        print("\n\nUsage: python3 {} <ref filename> <bed filename from bam>".format(argv[0]))
+        print("\n\nUsage: <line in bed12> | python3 {} <ref filename> <bed filename from bam>".format(argv[0]))
         sys.exit(0)
     
-    #gtfbedline = sys.stdin
+    # gtfbedline = sys.stdin
     annotation_bedline = next(sys.stdin)
-    
     genome_ref_filename, bambedfile = args[1:3]
+    
+    #count support over whole genome
+    name, strand, annotated_sites, junction_pos, transcript_length \
+     = ReadBedLine(annotation_bedline)
+    count_intron_start, count_intron_end, count_intron_mapping=\
+        count_splice_site_supports(bambedfile, strand)
+
+
+    # Load reference.(Note: currently, all reads come from a single chr. Modification needed for real data analysis)
     with open(genome_ref_filename, 'r') as gf:
         next(gf)
         genome_ref = next(gf)
 
-    name, strand, annotated_sites, junction_pos, transcript_length \
-     = ReadBedLine(annotation_bedline)
-
-    count_intron_start, count_intron_end, count_intron_mapping=\
-        count_splice_site_supports(bambedfile, strand)
-
+    # candidates: [<class:candidate_class>,...]
     candidates = []
     
-    
     for site in annotated_sites:
-        candidate_splice_site_list = [site]
-        # best supported sites:
-        search_win = 20
-        accept_thres = 3 # minimum support
-        flank_size = 15 # junction flanking in each side
+        
+        # init the list with annotated site
+        candidate_splice_site_list = []
 
+        # init the count with minimum accept thres
         best_supported_count = accept_thres
         best_supported_site = []
         
-        
+        # loop over combination of sites in upstream and downstream search win
         for counted_site in itertools.product(range(site[0] - int(np.floor(search_win/2)),site[0] + 1),\
               range(site[1], site[1] + int(np.ceil(search_win/2)) + 1)):
-        
+            
             if counted_site == site:
                 continue
             
             if count_intron_mapping[counted_site] >= best_supported_count:
                 best_supported_count = count_intron_mapping[counted_site]
-                best_supported_site.append(counted_site)
+                best_supported_site = [counted_site]
 
 
-        candidate_splice_site_list += best_supported_site +\
+        candidate_splice_site_list = [site] + best_supported_site +\
          search_potential_canonical_sites(site, window = search_win, genome_ref = genome_ref, strand = strand)
-
-
         candidate_splice_site_list = list(set(candidate_splice_site_list))
+        
+        # put the true one at the top of the list
         true_index = candidate_splice_site_list.index(site)
         candidate_splice_site_list[0], candidate_splice_site_list[true_index] =\
         candidate_splice_site_list[true_index], candidate_splice_site_list[0]
 
-
-
-        # generate candidate
-        
+        # generate candidate for sites
         candidate = candidate_class(num_of_correct_supports = count_intron_mapping[site])
         candidate.start = min([x for x,y in candidate_splice_site_list]) - flank_size
         candidate.end = max([y for x,y in candidate_splice_site_list]) + flank_size
@@ -254,7 +264,6 @@ def main():
         candidates.append(candidate)
 
     if strand  == '+':
-
         for candidate in candidates:
             print(','.join(candidate.sequences) + ",{},{},{}".format( candidate.start,\
                 candidate.end,candidate.num_of_correct_supports))
@@ -268,7 +277,6 @@ def main():
 
     
     return None
-
 
 if __name__ == '__main__':
     main()

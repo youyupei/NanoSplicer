@@ -235,6 +235,74 @@ def dtw_local_alignment_max_mean(long, short, radius = None, dist_type = None, \
 
     return best_path[::-1], best_score,mean_matrix[:,:,0]
 
+
+
+def dtw_global_alignment_max_sum(seq1, seq2, radius = None, \
+            dist_type = None, upper = np.inf):
+
+
+    # init accumulated matrix
+    seq2_len = len(seq2)
+    seq1_len = len(seq1)
+    cum_matrix = np.zeros((seq2_len + 1, seq1_len + 1))
+    cum_matrix[1:, 0] = np.inf
+    cum_matrix[0, 1:] = np.inf
+    
+    pre_step_matrix = np.zeros((seq2_len + 1, seq1_len + 1), dtype = int)
+    '''
+    matrix for recording the best path. Each of the cells contains one of three
+    possible integer: 0 ,1 ,2 indecating the corresponding value in cum_matrix
+    (cum_matrix[i,j]) came from the cum_matrix[i-1,j], cum_matrix[i - 1,j - 1],
+     and cum_matrix[i, j - 1] respectively.
+    '''
+    
+    # build matrix
+    for i in range(1, seq2_len + 1):
+        for j in range(1, seq1_len + 1):
+
+            pre_values = (cum_matrix[i-1,j], 
+                        cum_matrix[i - 1,j - 1],
+                        cum_matrix[i, j - 1])
+            
+            
+            #pre_step_matrix[i, j] = np.argmin(pre_values)
+            pre_step_matrix[i, j] = np.random.choice(\
+                            np.where(pre_values==min(pre_values))[0])
+            
+            cum_matrix[i, j] = min(pre_values) +\
+                        cost(seq1[j -1], *seq2[i - 1], dist_type = dist_type)
+    best_score = cum_matrix[-1,-1]
+    best_path = []
+  
+
+    # init trace back index
+    traced_seq1_index = seq1_len
+    traced_seq2_index = seq2_len
+
+    
+
+
+    #plt.plot(cum_matrix[-1:][0])
+    #plt.savefig('path_score.png')
+
+    while True:
+        best_path.append([traced_seq2_index, traced_seq1_index])
+        pre_step = pre_step_matrix[traced_seq2_index, traced_seq1_index]
+
+        if traced_seq2_index == 1:
+            break
+
+        if pre_step in (0, 1):
+            traced_seq2_index -= 1
+        
+        if pre_step in (1, 2):
+            traced_seq1_index -= 1
+    # best_path: 0-based coordinate on the (i+1)*(j+1) matrix
+    best_path = np.array(best_path)
+    return best_path[::-1], best_score/len(best_path[::-1]),cum_matrix
+
+
+
 def main():
     short = np.array([[1,4],[2,9],[3,1],[4,1],[5,2]])
     long = np.array([1,1,1,3,4,5,7,5,4,5])

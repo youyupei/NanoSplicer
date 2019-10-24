@@ -8,6 +8,7 @@ import os
 from collections import defaultdict
 import scrappy
 import matplotlib.pyplot as plt
+import sys
 
 
 def read_raw_signal(fast5, start = None, end = None):
@@ -32,28 +33,32 @@ def read_raw_signal(fast5, start = None, end = None):
 		signal = list(h5_f["Raw/Reads/"][read_key]["Signal"])        
 		return(signal[start:end])
 
-def normalization(signal, method = "z_score"):
-	'''
-	Args:
-		signal dataset from fast5
-	Returns:
-		 nomalised signal <np.array>
-	'''
-	signal = np.array(signal)
+#def normalization(signal, method = "z_score"):
+#	'''
+#	Args:
+#		signal dataset from fast5
+#	Returns:
+#		 nomalised signal <np.array>
+#	'''
+#	signal = np.array(signal)
+#	
+#	if method == "z_score":
+#		return((signal - np.mean(signal)) / np.std(signal))
+#
+#	elif method == "median_shift":    
+#	  	mad_scale = np.median(abs(signal - np.median(signal)))
+#	  	norm_signal = (signal - np.median(signal)) / mad_scale
+#	  	return(norm_signal)
+#
+#	else:
+#		print("ERROR during normalization. The normalization method is  \
+#			not recognized. The accepted method: z_score,  meadian-shift")
+#		sys.exit(0)
+#
+
+
+
 	
-	if method == "z_score":
-		return((signal - np.mean(signal)) / np.std(signal))
-
-	elif method == "median_shift":    
-	  	mad_scale = np.median(abs(signal - np.median(signal)))
-	  	norm_signal = (signal - np.median(signal)) / mad_scale
-	  	return(norm_signal)
-
-	else:
-		print("ERROR during normalization. The normalization method is  \
-			not recognized. The accepted method: z_score,  meadian-shift")
-		sys.exit(0)
-
 def reverse_complement(seq):
 	'''
 	Args: <str>
@@ -195,7 +200,7 @@ def get_mapped_info_from_fast5(fast5,window = 20):
 	return mapping_info
 
 # scrappie squiggle
-def sequence_to_squiggle(seq, trim = 4):
+def sequence_to_squiggle(seq, trim = 0):
     '''input:
         sequence <str>
         output:
@@ -211,7 +216,7 @@ def sequence_to_squiggle(seq, trim = 4):
 
 
 
-def expect_squiggle_dict(seqs=None):
+def expect_squiggle_dict(seqs, trim = 0):
 	'''
 	read squiggle data from scrappie, ready for dtw
 	Args:
@@ -225,7 +230,7 @@ def expect_squiggle_dict(seqs=None):
 	if seqs:
 		expect_squiggle_dic = defaultdict(list)
 		for seq in seqs:
-			squiggle = sequence_to_squiggle(seq)
+			squiggle = sequence_to_squiggle(seq, trim)
 			for mean, std, dwell_time in squiggle:
 				expect_squiggle_dic[seq] += [[mean, std]] *int(round(dwell_time))
 	else:
@@ -311,15 +316,20 @@ def plot_dtw_alignment( long_seq, short_seq, dtw_path, dtw_score = None, \
 class Fast5Class(object):
 	def __init__(self, filename):
 		self.filename = filename
-	
-	def get_signal(self, start = None, end = None, normalization = True):
-		start = int(start) if start else 0
-		end = int(end) if end else None
 
-		if end and end <= start:
+	
+	def get_signal(self, start = None, end = None, normalization = True,\
+	 rm_outlier = True):
+
+		start = int(start) if start else 0
+		end = int(end) if end else -1
+
+		if end <= start:
 			print("InputError: Invalid start and end position when fetching \
 				when fetching the raw signals")
 			sys.exit(0)
+		
+
 
 		with h5py.File(self.filename, 'r') as h5_f: 
 			read_key = list(h5_f["Raw/Reads/"].keys())[0]
@@ -328,6 +338,10 @@ class Fast5Class(object):
 		if normalization:
 			self.get_alignment()
 			signal = (signal - self.norm_shift)/self.norm_scale
+		if rm_outlier:
+			signal = signal[start:end]
+			signal = self.remove_outlier(signal, thresh = 3)
+			return(signal)
  
 		return(signal[start:end])
 
@@ -359,3 +373,16 @@ class Fast5Class(object):
 				return self.norm_shift, self.norm_scale
 			else:
 				return None
+	def remove_outlier(self, normalised_signal, thresh = 3):
+		'''
+		remove the data points in signal whose obsolute value reaches the thresh.
+
+		Args:
+			<list>/<np.array>Normalised signal
+			<int> threshold for outliers
+		Returns:
+			<np.array>Normalised signal with outlier removed
+		
+		'''
+		normalised_signal = np.array(normalised_signal)
+		return normalised_signal[np.abs(normalised_signal < thresh)]	

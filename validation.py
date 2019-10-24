@@ -17,9 +17,16 @@ from helper import parse_candidate_file
 from dtw import dtw_local_alignment_max_mean as dtw_mean
 #from dtw_cy.dtw import dtw_local_alignment_max_sum as dtw_sum
 from dtw import dtw_local_alignment_max_sum as dtw_sum
+from dtw import dtw_global_alignment_max_sum as dtw_global
 
 # choose the version of dtw (sum: minimize the sum of cost for the path)
 dtw_local_alignment = dtw_sum
+
+# CONSTANT
+TRIM_SIGNAL = 0
+TRIM_MODEL = 4
+
+
 
 def main():
     def print_help():
@@ -105,8 +112,8 @@ def main():
         
         # get signal
         signal = helper.get_junction_signal_by_pos(
-            fast5 = fast5_filename, start_pos = candidate.start ,
-             end_pos = candidate.end)
+            fast5 = fast5_filename, start_pos = candidate.start + TRIM_SIGNAL,
+             end_pos = candidate.end - TRIM_SIGNAL)
 
         if not len(signal):
             for i in range(len(candidate.sequences)):
@@ -123,7 +130,7 @@ def main():
         # Normalisation
         #signal = helper.normalization(signal,"z_score") # "median_shift" or "z_score"
 
-        model_dic = expect_squiggle_dict(candidate.sequences)
+        model_dic = expect_squiggle_dict(candidate.sequences, trim = TRIM_MODEL)
         
         dtw_long = np.array(signal, float)
 
@@ -135,6 +142,7 @@ def main():
 
             #print("dtw_short")
             dtw_short = np.array(dtw_short)
+            np.random.shuffle(dtw_short)
             #print("Input queried signal: " + '\t'.join([str(i) for i in dtw_long]))
 
             #print("\n\n\nInput model: " + '\t'.join([str(i) for i in dtw_short]))
@@ -145,12 +153,10 @@ def main():
             #dtw_long = np.repeat(dtw_long,3)
             #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
 
-            path1 , score1 = dtw_local_alignment(
-                dtw_long, dtw_short, dist_type = "z_score")[0:2]
+            path1 , score1 = 'NA','NA'#dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")[0:2]
             path2 , score2 = dtw_local_alignment(
                 dtw_long, dtw_short, dist_type = "log_likelihood")[0:2]
-            path3 , score3 = dtw_local_alignment(
-                dtw_long, dtw_short, dist_type = 'manhattan')[0:2]
+            path3 , score3 = 'NA','NA'#dtw_local_alignment（dtw_long, dtw_short, dist_type = 'manhattan')[0:2]
             outf.write(',{},{},{}'.format(score1,score2,score3))
             timer_stop = timeit.default_timer()
             runtime = timer_stop - timer_start

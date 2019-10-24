@@ -204,7 +204,7 @@ def main():
 
         timer_start = timeit.default_timer()
         
-        
+        #dtw_long = dtw_long *1.4 + 0.4
         #dtw_long = np.repeat(dtw_long,3)
         #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
         #path , score, matrix = dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")
