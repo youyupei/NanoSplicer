@@ -1,6 +1,6 @@
 # Introduction
 This is a repo for my PhD project: Splicing site identification using Nanopore sequencing.
-[Documentation](https://youyupei.github.io/Nanopore-Splicing-Site)
+[Documentation](https://youyupei.github.io/NanoSplicer)
 
 # Project discription
 ## Accurate identification of mRNA splice sites using Oxford Nanopore sequencing  
