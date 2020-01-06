@@ -13,6 +13,8 @@ import helper
 
 from dtw import dtw_local_alignment_max_mean as dtw_mean
 from dtw import dtw_local_alignment_max_sum as dtw_sum
+
+TRIM_MODEL = 4
 #from dtw_cy.dtw import dtw_local_alignment_max_sum as dtw_sum
 
 
@@ -95,7 +97,6 @@ def main():
         print('\t\t-m STR\tscrappie squiggle model filename')
         print('\t\t-f STR\tqueried sequence FASTA filename')
         print('\t\t-q STR\tqueried candidate sequence')
-        
 
         return None
       
@@ -179,7 +180,7 @@ def main():
     # Normalisation
     #signal = helper.normalization(signal,"median_shift") # "median_shift" or "z_score"
 
-    model_dic = helper.expect_squiggle_dict(sequences)
+    model_dic = helper.expect_squiggle_dict(sequences,trim = TRIM_MODEL)
     dtw_long = np.array(signal, float)
     
     candidate_ID = 0
@@ -200,10 +201,11 @@ def main():
 
         #print("\n\n\nInput model: " + '\t'.join([str(i) for i in dtw_short]))
 
-        print("\n\n\nRunning DTW...")
+        #print("\n\n\nRunning DTW...")
 
         timer_start = timeit.default_timer()
-        
+        print(dtw_short)
+        exit(1)
         #dtw_long = dtw_long *1.4 + 0.4
         #dtw_long = np.repeat(dtw_long,3)
         #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
@@ -213,8 +215,8 @@ def main():
 
 
         timer_stop = timeit.default_timer()
-        print("\n\nDTW finished, runtime: {} sec".format(timer_stop - timer_start))
-        print("\n\nAlignment distance: {}".format(score))
+        #print("\n\nDTW finished, runtime: {} sec".format(timer_stop - timer_start))
+        #print("\n\nAlignment distance: {}".format(score))
 
 
         plt.figure(figsize=(300,30))
@@ -222,28 +224,33 @@ def main():
         matplotlib.rc('ytick', labelsize=20)
         fig, axes = plt.subplots(nrows=3, figsize=(30,20))
 
-        axes[0].plot(dtw_long)
+
+        axes[0].plot(dtw_long,linewidth = 10)
+        axes[0].tick_params(labelsize=40)
         path = np.array(path[::-1])
-        print("\n\n\nBest path start and end:\n{} {}".format(np.array(path)[0,1],np.array(path)[-1,1]))
-        print("\n\n\nBest path length:\n{}".format(len(np.array(path))))
+        #print("\n\n\nBest path start and end:\n{} {}".format(np.array(path)[0,1],np.array(path)[-1,1]))
+        #print("\n\n\nBest path length:\n{}".format(len(np.array(path))))
         
-        axes[0].plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0],'g')
+        axes[0].plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0],'',color = "orange",linewidth = 7)
         axes[0].plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
-                                        + dtw_short[[np.array(path)[:,0]-1]][:,1],'g--')
+                                        + dtw_short[[np.array(path)[:,0]-1]][:,1],':',color = "orange",linewidth = 4)
 
         axes[0].plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
-                                        - dtw_short[[np.array(path)[:,0]-1]][:,1],'g--')
+                                        - dtw_short[[np.array(path)[:,0]-1]][:,1],':',color = "orange",linewidth = 4)
 
-        axes[0].set_title(figure_name+"_"+key+"({})\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(str(candidate_ID == 1),score*len(np.array(path)),len(np.array(path)),score),fontsize=40)
-        
+        axes[0].set_title(figure_name+"_"+key+"({})\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(str(candidate_ID == 1),score*len(np.array(path)),len(np.array(path)),score),fontsize=40, pad = 30)
+        print(key)
         
         #plt.savefig(figure_name+"_"+str(candidate_ID)+".png")
         
         #plot simulated squiggle only?
         if True:
             #axes[1].figure(figsize=(10,5))
-            axes[1].plot(dtw_short[:,0], 'g')
-            axes[1].set_title("Scrappie model",fontsize=30)
+            axes[1].plot(dtw_short[:,0], color = "orange",linewidth =7)
+            axes[1].plot(dtw_short[:,0] + dtw_short[:,1], ":",color = "orange",linewidth = 4)
+            axes[1].plot(dtw_short[:,0] - dtw_short[:,1], ":",color = "orange",linewidth = 4)
+            axes[1].tick_params(labelsize=40)
+            axes[1].set_title("Scrappie model",fontsize=30, pad = 20)
             #plt.savefig(figure_name+"_"+str(candidate_ID)+"simulated_squiggle.png")
 
         # plot path heatmap
@@ -253,7 +260,8 @@ def main():
             pos = axes[2].imshow(matrix, cmap='hot', interpolation='nearest',aspect='auto')
             fig.colorbar(pos,ax = axes[2])
             axes[2].plot(path[:,1], path[:,0])
-            axes[2].set_title("Alignment path",fontsize=30)
+            axes[2].set_title("Alignment path",fontsize=30, pad = 20)
+            plt.subplots_adjust(hspace=0.5)
             plt.savefig(figure_name+"_" + "{}({}).png".format(str(candidate_ID), str(candidate_ID == 1)))
 
 if __name__ == "__main__":

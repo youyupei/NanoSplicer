@@ -1,6 +1,7 @@
 '''
 plot the scrappie model
 '''
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -8,7 +9,7 @@ from collections import defaultdict
 import scrappy, os
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/..")
 import helper
-
+matplotlib.rcParams.update({'font.size': 30})
 
 def read_synth_model(filename):
     '''
@@ -42,7 +43,8 @@ def main():
     if '.model' not in argv[1]:
         sequence = argv[1]
     if True:
-        sequence = helper.reverse_complement(sequence)
+        pass
+        #sequence = helper.reverse_complement(sequence)
     else:
         filename = argv[1]
 
@@ -51,6 +53,7 @@ def main():
         synth_mean,synth_std, signal_dic = read_synth_model(filename)
     if sequence:
         sim_seq = helper.sequence_to_squiggle(sequence)
+        print(sim_seq)
         signal_dic = defaultdict(list)
         for mean, std, dwell_time in sim_seq:
             signal_dic['seq'] += [mean] *int(round(dwell_time))
@@ -60,15 +63,19 @@ def main():
 
     # Normalisation
     for key in signal_dic.keys():
-        signal = helper.normalization(signal_dic[key], 'z_score')
+        signal = signal_dic[key]#helper.normalization(signal_dic[key], 'z_score')
         fig, ax = plt.subplots()
         fig.set_size_inches(20, 9.5)
-        ax.plot(np.array(signal))
+        ax.plot(np.array(signal),color = "orange",linewidth = 10)
+        ax.plot(np.array(signal) + std,":",color = "orange",linewidth = 4)
+        ax.plot(np.array(signal) -std,":",color = "orange",linewidth = 4)
+        
+        #ax.fill_between([x for x in range(len(signal))],np.array(signal) + std, np.array(signal) -std,color = 'orange',alpha = 0.2)
 
 
-        ax.set_ylabel("Current levle", fontsize = 25)
-        ax.set_xlabel("index", fontsize = 25)
-        ax.grid()
+        #ax.set_ylabel("Current levle", fontsize = 25)
+        #ax.set_xlabel("index", fontsize = 25)
+        #ax.grid()
 
         fig.savefig(argv[2]+key+'.png')
         print("Figure saved!")

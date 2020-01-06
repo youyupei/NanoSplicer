@@ -90,7 +90,6 @@ def main():
         elif opt in ("-c", "--candidate_file"):
            candidate_file = arg
 
-
     outf = open(output_file,'w')
     '''
     outf.write("read id")
@@ -142,7 +141,7 @@ def main():
 
             #print("dtw_short")
             dtw_short = np.array(dtw_short)
-            np.random.shuffle(dtw_short)
+            #np.random.shuffle(dtw_short)
             #print("Input queried signal: " + '\t'.join([str(i) for i in dtw_long]))
 
             #print("\n\n\nInput model: " + '\t'.join([str(i) for i in dtw_short]))
@@ -152,7 +151,6 @@ def main():
             timer_start = timeit.default_timer()
             #dtw_long = np.repeat(dtw_long,3)
             #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
-
             path1 , score1 = 'NA','NA'#dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")[0:2]
             path2 , score2 = dtw_local_alignment(
                 dtw_long, dtw_short, dist_type = "log_likelihood")[0:2]

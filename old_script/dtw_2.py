@@ -8,9 +8,9 @@ from math import exp, pi, sqrt, log
 
 # require fastdtw to be installed 
 # "pip install fastdtw"
-#from fastdtw import fastdtw
+#from fastdtw import fastdtw 
 ''' 
-    fastdtw(x, y, radius=1, dist=None)      
+    fastdtw(x, y, radius=1, dist=None)  
 
     return the approximate distance between 2 time series with O(N)
         time and memory complexity
@@ -21,7 +21,7 @@ from math import exp, pi, sqrt, log
         y : array_like
             input array 2
         radius : int
-            size of neighborhood when expanding the path. A higher value will
+            size of neighborhood when expanding the path. A higher value will!
             increase the accuracy of the calculation but also increase time
             and memory consumption. A radius equal to the size of x and y will
             yield an exact dynamic time warping calculation.
