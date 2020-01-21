@@ -82,9 +82,7 @@ def main():
     
     # get read id
     #########################################################
-    read_id  = helper.Fast5Class(fast5_filename).get_read_id()
-    print(read_id)
-    exit(1)
+    #read_id  = helper.Fast5Class(fast5_filename).get_read_id()
     #########################################################
    
     outf = open(output_file,'w')
@@ -133,11 +131,11 @@ def main():
              for s in candidate.sequences]
 
 ########################################delete later######################################
-        with open("squiggle.csv", 'a') as squiggle_f:
-            squiggle_f.write(','.join([str(x) for x in signal]) + '\n')
-        with open("candidate.csv", 'a') as candidate_f:
-            candidate_f.write(read_id + ',' + ','.join(candidate.sequences) + '\n')
-        continue
+ #       with open("squiggle.csv", 'a') as squiggle_f:
+   #         squiggle_f.write(','.join([str(x) for x in signal]) + '\n')
+   #     with open("candidate.csv", 'a') as candidate_f:
+   #         candidate_f.write(read_id + ',' + ','.join(candidate.sequences) + '\n')
+   #     continue
 ##########################################################################################
 
         # Normalisation
