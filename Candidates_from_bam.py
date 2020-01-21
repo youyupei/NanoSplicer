@@ -13,15 +13,6 @@ import re
 from collections import defaultdict
 import helper
 
-
-# CONSTANT
-
-SEARCH_WIN = 20 # window size of candidate splicing site searching
-ACCEPT_THRES = 3 # minimum support  # best supported site:
-FLANK_SIZE = 15 # junction flanking in each side
-
-
-
 def ReadBedLine(bedline):
     """
     Take a bed12 format line as input and return the corresponding splicing
@@ -185,18 +176,19 @@ class candidate_class:
             self.num_of_correct_supports = num_of_correct_supports
 
 
-def main(search_win = SEARCH_WIN, accept_thres =  ACCEPT_THRES,
-    flank_size = FLANK_SIZE):
+def main():
     
     args = sys.argv
-    if len(args) < 2:
-        print("\n\nUsage: <line in bed12> | python3 {} <ref filename> <bed filename from bam>".format(argv[0]))
+    if len(args) < 6:
+        print("\n\nUsage: <line in bed12> | \
+        python3 {} <SEARCH_WIN> <ACCEPT_THRES> <FLANK_SIZE> <ref filename> <bed filename from bam>".format(argv[0]))
         sys.exit(0)
     
     # gtfbedline = sys.stdin
     annotation_bedline = next(sys.stdin)
-    genome_ref_filename, bambedfile = args[1:3]
-    
+    search_win, accept_thres, flank_size,genome_ref_filename,\
+     bambedfile = args[1:6]
+    search_win, accept_thres, flank_size = int(search_win), int(accept_thres), int(flank_size)
     #count support over whole genome
     name, strand, annotated_sites, junction_pos, transcript_length \
      = ReadBedLine(annotation_bedline)

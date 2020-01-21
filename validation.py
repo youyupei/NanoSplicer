@@ -19,77 +19,74 @@ from dtw import dtw_local_alignment_max_mean as dtw_mean
 from dtw import dtw_local_alignment_max_sum as dtw_sum
 from dtw import dtw_global_alignment_max_sum as dtw_global
 
-# choose the version of dtw (sum: minimize the sum of cost for the path)
-dtw_local_alignment = dtw_sum
-
-# CONSTANT
-TRIM_SIGNAL = 0
-TRIM_MODEL = 4
-
-
-
-def main():
+def parse_arg():
     def print_help():
-        '''
-        print command line instruction
-        '''
         print("\n\nUsage: python {} [OPTIONS] <fast5 filename>".format(argv[0]))
         print("Options:\n\tIndexing:")
-        print('\t\t-c INT\tcandidate file name')
-        print('\t\t-o INT\toutput csv name')
+        print('\t\t-c INT\tcandidate file name (required)')
+        print("\t\t-o INT\toutput csv name, default: 'Untitled'")
+        print('\t\t-T \tNumber of events trimmed from scrappie model')
+        print('\t\t-t \tNumber of samples trimmed from raw signal')
+     
         return None
-      
+
     argv = sys.argv
     if len(argv) <= 2:     
         print_help()       # print help doc when no command line args provided
         sys.exit(0)
     
     try: 
-        opts, args = getopt.getopt(argv[1:],"hs:e:o:m:f:q:p:w:c:",
-                    ["help=","start=","end=","output_figure=",
-                    "model=","fasta=","sequence=", "position=", "window=",
-                    "candidate_file="])
+        opts, args = getopt.getopt(argv[1:],"ho:c:T:t:a",
+                    ["help=","output_csv=", "candidate_file=",\
+                    "trim_model=","trim_signal=","dtw_adj"])
     except getopt.GetoptError:
         print_help()
         sys.exit(0)
 
-    start_pos, end_pos,read_from_model,read_from_fasta,sequence,candidate_file \
-        = None, None, None, None, None, None
-
-    t_position = None
-
-    #window = 20
     output_file = "Untiled"
-  
     try:
         fast5_filename = args[0]
     except:
         print("InputError: missing fast5 file name!")
         sys.exit(0)
 
+    # DEFAULT VALUE
+    trim_signal = 0
+    trim_model = 4
+    dtw_adj = False
+
     for opt, arg in opts:
         if opt in ('-h', "--help"):
             print_help()
             sys.exit(0)
-        elif opt in ("-s", "--start"):
-            start_pos = int(arg)
-        elif opt in ("-e", "--end"):
-            end_pos= int(arg)
         elif opt in ("-o", "--output_csv"):
             output_file = arg
-        elif opt in ("-m", "--model"):
-            read_from_model = arg
-        elif opt in ("-f", "--fasta"):
-            read_from_fasta = arg
-        elif opt in ("-q", "--sequence"):
-            sequence = arg.strip().split(',')
-        elif opt in ("-p", "--position"):
-            t_position = int(arg)
-        elif opt in ("-w", "--window"): 
-            window = int(arg)
         elif opt in ("-c", "--candidate_file"):
            candidate_file = arg
+        elif opt in ("-T", "--trim_model"):
+           trim_model = int(arg)
+        elif opt in ("-t", "--trim_signal"):
+           trim_signal = int(arg)
+        elif opt in ("-a", "--dtw_adj"):
+           dtw_adj = True
 
+    # choose the version of dtw (sum: minimize the sum of cost for the path)
+    dtw_local_alignment = dtw_mean if dtw_adj else dtw_sum
+    
+    return fast5_filename, output_file, candidate_file,\
+     dtw_local_alignment, trim_model, trim_signal
+
+def main():
+    fast5_filename, output_file, candidate_file, \
+        dtw_local_alignment, trim_model, trim_signal = parse_arg()
+    
+    # get read id
+    #########################################################
+    read_id  = helper.Fast5Class(fast5_filename).get_read_id()
+    print(read_id)
+    exit(1)
+    #########################################################
+   
     outf = open(output_file,'w')
     '''
     outf.write("read id")
@@ -98,21 +95,30 @@ def main():
     
     outf.write('\n'+ fast5_filename)
     '''
-    if "candidate_file" in locals():
-        candidates = parse_candidate_file(candidate_file)
+
+    candidates = parse_candidate_file(candidate_file)
+
+
 
     try:
         strand = helper.Fast5Class(fast5_filename).get_alignment(
             "mapping_info")["mapped_strand"]
     except:
         sys.exit(0)
+    
+
+    
+
+
     for candidate in candidates:
         outf.write(fast5_filename + ',' + strand + ',')
         
         # get signal
         signal = helper.get_junction_signal_by_pos(
-            fast5 = fast5_filename, start_pos = candidate.start + TRIM_SIGNAL,
-             end_pos = candidate.end - TRIM_SIGNAL)
+            fast5 = fast5_filename, start_pos = candidate.start + trim_signal,
+             end_pos = candidate.end - trim_signal)
+
+
 
         if not len(signal):
             for i in range(len(candidate.sequences)):
@@ -126,10 +132,18 @@ def main():
             candidate.sequences = [helper.reverse_complement(s)
              for s in candidate.sequences]
 
+########################################delete later######################################
+        with open("squiggle.csv", 'a') as squiggle_f:
+            squiggle_f.write(','.join([str(x) for x in signal]) + '\n')
+        with open("candidate.csv", 'a') as candidate_f:
+            candidate_f.write(read_id + ',' + ','.join(candidate.sequences) + '\n')
+        continue
+##########################################################################################
+
         # Normalisation
         #signal = helper.normalization(signal,"z_score") # "median_shift" or "z_score"
 
-        model_dic = expect_squiggle_dict(candidate.sequences, trim = TRIM_MODEL)
+        model_dic = expect_squiggle_dict(candidate.sequences, trim = trim_model)
         
         dtw_long = np.array(signal, float)
 

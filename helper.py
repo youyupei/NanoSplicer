@@ -76,7 +76,7 @@ def reverse_complement(seq):
 
 # TOMBO related functions
 def get_junction_signal_by_pos(fast5, junction_pos = None, 
-		window = 20, start_pos = None , end_pos = None, verbose = False):
+		window = None, start_pos = None , end_pos = None, verbose = False):
 
 	'''
 	Args:
@@ -200,23 +200,28 @@ def get_mapped_info_from_fast5(fast5,window = 20):
 	return mapping_info
 
 # scrappie squiggle
-def sequence_to_squiggle(seq, trim = 0):
+def sequence_to_squiggle(seq, trim = 0, model = 'squiggle_r94'):
     '''input:
-        sequence <str>
-        output:
-        numpy array:
-            [[mean, std, dwell]...]
+        seq:
+			<str> sequence to be converted to squiggle
+		trim:
+			<int> the number of events that will be ignored in each side.
+		model:
+			<str> scrappy model name:	{'squiggle_r94',
+										'squiggle_r94_rna',
+										'squiggle_r10'}
+        
+		output:
+			numpy array: [[mean, std, dwell]...]
     '''
-    simulated_seq = scrappy.sequence_to_squiggle(seq,rescale =True).data(
-                            as_numpy = True, sloika = False)
+    simulated_seq = scrappy.sequence_to_squiggle(seq,model = model, \
+		rescale =True).data(as_numpy = True, sloika = False)
     if trim:
         return simulated_seq[trim:-trim]
     else:
         return simulated_seq
 
-
-
-def expect_squiggle_dict(seqs, trim = 0):
+def expect_squiggle_dict(seqs, trim = 0, model = 'squiggle_r94'):
 	'''
 	read squiggle data from scrappie, ready for dtw
 	Args:
@@ -230,7 +235,7 @@ def expect_squiggle_dict(seqs, trim = 0):
 	if seqs:
 		expect_squiggle_dic = defaultdict(list)
 		for seq in seqs:
-			squiggle = sequence_to_squiggle(seq, trim)
+			squiggle = sequence_to_squiggle(seq = seq, trim = trim, model = model)
 			for mean, std, dwell_time in squiggle:
 				expect_squiggle_dic[seq] += [[mean, std]] *int(round(dwell_time))
 	else:
@@ -316,8 +321,14 @@ def plot_dtw_alignment( long_seq, short_seq, dtw_path, dtw_score = None, \
 class Fast5Class(object):
 	def __init__(self, filename):
 		self.filename = filename
+		
 
-	
+	def get_read_id(self):
+		with h5py.File(self.filename, 'r') as h5_f: 
+			read_key = list(h5_f["Raw/Reads/"].keys())[0]
+			read_id = h5_f["Raw/Reads/"][read_key].attrs['read_id']
+		return read_id
+		
 	def get_signal(self, start = None, end = None, normalization = True,\
 	 rm_outlier = True):
 

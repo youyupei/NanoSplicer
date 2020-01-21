@@ -81,8 +81,8 @@ def main():
     '''
     bed_files = os.listdir("transcript_ID")
     annotated_bed = "annotation.bed"
-    csv_dir = "/home/ubuntu/PhD_proj/pipeline/Validation/score_f15_t4_spikeT3"
-    out_dir = "/home/ubuntu/PhD_proj/pipeline/Validation_11_19_2019/score_f15_t4_spikeT3_minimap_correctness"
+    csv_dir = "/home/ubuntu/PhD_proj/pipeline/Validation/score_f15_t4_spikeT3_mean_1_14"
+    out_dir = "/home/ubuntu/PhD_proj/pipeline/Validation_11_19_2019/score_f15_t4_spikeT3_mean_1_14"
     
     for filename in bed_files:
         transID= filename[:-4]
