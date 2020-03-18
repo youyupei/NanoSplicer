@@ -25,6 +25,9 @@ def main():
                                                                 int(argv[4]))
     else:
         signal = helper.read_raw_signal(filename)
+        med_sig = np.median(signal)
+        mad_sig = np.median(abs(med_sig - signal)) * 1.4826
+        signal = (signal - med_sig)/mad_sig
 
     # Normalisation
     #signal = helper.normalization(signal, "z_score")
@@ -32,6 +35,8 @@ def main():
     fig, ax = plt.subplots()
     fig.set_size_inches(20, 9.5)
     ax.plot(np.array(signal),linewidth = 1)
+    ax.plot([3]*len(signal), ":",color = "orange",linewidth = 4)
+    ax.plot([-3]*len(signal), ":",color = "orange",linewidth = 4)
 
     #ax.set_ylabel("Current levle", fontsize = 25)
     #ax.set_xlabel("index", fontsize = 25)

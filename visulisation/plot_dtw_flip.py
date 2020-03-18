@@ -9,10 +9,10 @@ import scrappy
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/..")
 import helper
 
-from dtw import dtw_local_alignment_max_mean as dtw_mean
-from dtw import dtw_local_alignment_max_sum as dtw_sum
-from dtw import dtw_local_alignment_max_sum_band as dtw_band
+from dtw import dtw_local_alignment_max_sum_band_flipped as dtw_local_alignment
+from dtw import dist_to_likelihood_flipped
 
+TRIM_SIGNAL = 6
 
 def parse_arg():
     '''
@@ -49,7 +49,7 @@ def parse_arg():
             = None, None, None, None
         verbose = False
         window = 20
-        trim_model = 4
+        trim_model = 2
         figure_name = "Untiled"
         scrappie_model = 'squiggle_r94'
         
@@ -76,16 +76,9 @@ def parse_arg():
             elif opt in ("-m", "--scrappie_model"):
                 scrappie_model = arg
 
-        # choose the version of dtw (sum: minimize the sum of cost for the path)
-        dtw_local_alignment = dtw_sum
-        if "mean" in figure_name:
-            dtw_local_alignment = dtw_mean
-        elif "band" in figure_name:
-            dtw_local_alignment = dtw_band
         fast5_filename = args[0]
 
-        return start_pos, end_pos,sequence,t_position, verbose, trim_model,\
-            dtw_local_alignment,fast5_filename, window, figure_name, scrappie_model,sequences
+        return start_pos, end_pos,sequence,t_position, verbose, trim_model, fast5_filename, window, figure_name, scrappie_model,sequences
 
     except:
         print("Error,failed to parse command line arguments!")
@@ -95,15 +88,18 @@ def parse_arg():
 
 def main():
 
+
     # parse command line args:
     start_pos, end_pos,sequence,t_position, verbose, trim_model,\
-        dtw_local_alignment,fast5_filename, window, figure_name,\
+    fast5_filename, window, figure_name,\
         scrappie_model,sequences = parse_arg()
+    
 
     # get signal
     if start_pos and end_pos:
         signal = helper.get_junction_signal_by_pos(fast5_filename, \
-         start_pos = start_pos, end_pos = end_pos)
+         start_pos = start_pos + TRIM_SIGNAL, end_pos = end_pos - TRIM_SIGNAL)
+
 
     elif t_position:
         signal = helper.get_junction_signal_by_pos(fast5_filename, 
@@ -160,30 +156,46 @@ def main():
         print("\n\nDTW finished, runtime: {} sec".format(timer_stop - timer_start))
         #print("\n\nAlignment distance: {}".format(score))
 
+        likelihood, unmatched = dist_to_likelihood_flipped(dtw_short, dtw_long, path, dist_type = "log_likelihood")   
+        print("#############################################################")
+        print(likelihood)
+        print("#############################################################")
         plt.figure(figsize=(300,30))
         matplotlib.rc('xtick', labelsize=20)     
         matplotlib.rc('ytick', labelsize=20)
         fig, axes = plt.subplots(nrows=3, figsize=(30,20))
+###################################################################
+
 
         axes[0].plot(dtw_long,linewidth = 10)
+        #axes[0].plot(dtw_short[:,0],color = "orange",linewidth = 6)
+        #axes[0].plot(dtw_short[:,0] + dtw_short[:,1],':',color = "orange",linewidth = 4)
+        #axes[0].plot(dtw_short[:,0] - dtw_short[:,1],':',color = "orange",linewidth = 4)
+
+        
         axes[0].tick_params(labelsize=40)
         path = np.array(path[::-1])
         #print("\n\n\nBest path start and end:\n{} {}".format(np.array(path)[0,1],np.array(path)[-1,1]))
         #print("\n\n\nBest path length:\n{}".format(len(np.array(path))))
         
-        axes[0].plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0],'',color = "orange",linewidth = 7)
-        axes[0].plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
-                                        + dtw_short[[np.array(path)[:,0]-1]][:,1],':',color = "orange",linewidth = 4)
+        axes[0].plot(np.array(path)[:,0]-1, dtw_short[[np.array(path)[:,1]-1]][:,0],'',color = "orange",linewidth = 7)
+        
+        #axes[0].plot(np.array(path)[:,1]-1, dtw_long[[np.array(path)[:,0]-1]],'',linewidth = 4)
+        
+        axes[0].plot(np.array(path)[:,0]-1, dtw_short[[np.array(path)[:,1]-1]][:,0]\
+                                        + dtw_short[[np.array(path)[:,1]-1]][:,1],':',color = "orange",linewidth = 4)
 
-        axes[0].plot(np.array(path)[:,1]-1, dtw_short[[np.array(path)[:,0]-1]][:,0]\
-                                        - dtw_short[[np.array(path)[:,0]-1]][:,1],':',color = "orange",linewidth = 4)
+        axes[0].plot(np.array(path)[:,0]-1, dtw_short[[np.array(path)[:,1]-1]][:,0]\
+                                        - dtw_short[[np.array(path)[:,1]-1]][:,1],':',color = "orange",linewidth = 4)
 
         axes[0].set_title(figure_name+"_"+key+"({})\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(str(candidate_ID == 1),score*len(np.array(path)),len(np.array(path)),score),fontsize=40, pad = 30)
         print("candidate " + key + "finished!")
         
+
         #plt.savefig(figure_name+"_"+str(candidate_ID)+".png")
         
         #plot simulated squiggle?
+
         if True:
             #axes[1].figure(figsize=(10,5))
             axes[1].plot(dtw_short[:,0], color = "orange",linewidth =7)
@@ -194,15 +206,23 @@ def main():
             #plt.savefig(figure_name+"_"+str(candidate_ID)+"simulated_squiggle.png")
 
         # plot path heatmap
-        if True:
+        if False:
             #axes[2].figure(figsize=(10,5))
             #fig.figsize=(10,5)
             pos = axes[2].imshow(matrix, cmap='hot', interpolation='nearest',aspect='auto')
             fig.colorbar(pos,ax = axes[2])
             axes[2].plot(path[:,1], path[:,0])
             axes[2].set_title("Alignment path",fontsize=30, pad = 20)
-            plt.subplots_adjust(hspace=0.5)
-            plt.savefig(figure_name+"_" + "{}({}).png".format(str(candidate_ID), str(candidate_ID == 1)))
+
+        
+        # plot squiggle
+        if True:
+            axes[2].plot(dtw_long,linewidth = 4)
+        
+        
+        plt.subplots_adjust(hspace=0.5)
+        plt.savefig(figure_name+"_" + "{}({}).png".format(str(candidate_ID), str(candidate_ID == 1)))
+
 
 if __name__ == "__main__":
     main()

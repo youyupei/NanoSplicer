@@ -18,6 +18,8 @@ from dtw import dtw_local_alignment_max_mean as dtw_mean
 #from dtw_cy.dtw import dtw_local_alignment_max_sum as dtw_sum
 from dtw import dtw_local_alignment_max_sum as dtw_sum
 from dtw import dtw_global_alignment_max_sum as dtw_global
+from dtw import dtw_local_alignment_max_sum_band_flipped as dtw_band
+from dtw import dist_to_likelihood, dist_to_likelihood_flipped_time_serie,dist_to_likelihood_flipped_new_path,dist_to_likelihood_flipped
 
 def parse_arg():
     def print_help():
@@ -36,9 +38,9 @@ def parse_arg():
         sys.exit(0)
     
     try: 
-        opts, args = getopt.getopt(argv[1:],"ho:c:T:t:a",
+        opts, args = getopt.getopt(argv[1:],"ho:c:T:t:ab:",
                     ["help=","output_csv=", "candidate_file=",\
-                    "trim_model=","trim_signal=","dtw_adj"])
+                    "trim_model=","trim_signal=","dtw_adj","bandwidth="])
     except getopt.GetoptError:
         print_help()
         sys.exit(0)
@@ -54,6 +56,7 @@ def parse_arg():
     trim_signal = 0
     trim_model = 4
     dtw_adj = False
+    bandwidth = False
 
     for opt, arg in opts:
         if opt in ('-h', "--help"):
@@ -69,9 +72,16 @@ def parse_arg():
            trim_signal = int(arg)
         elif opt in ("-a", "--dtw_adj"):
            dtw_adj = True
+        elif opt in ("-b", "--bandwidth"):
+           bandwidth = float(arg)
 
     # choose the version of dtw (sum: minimize the sum of cost for the path)
     dtw_local_alignment = dtw_mean if dtw_adj else dtw_sum
+    
+    if bandwidth:
+        def dtw_local_alignment(long, short, dist_type = None, upper = np.inf):
+            return dtw_band(long=long, short=short, band_prop = bandwidth,\
+            dist_type = dist_type, upper = upper)
     
     return fast5_filename, output_file, candidate_file,\
      dtw_local_alignment, trim_model, trim_signal
@@ -96,16 +106,11 @@ def main():
 
     candidates = parse_candidate_file(candidate_file)
 
-
-
     try:
         strand = helper.Fast5Class(fast5_filename).get_alignment(
             "mapping_info")["mapped_strand"]
     except:
         sys.exit(0)
-    
-
-    
 
 
     for candidate in candidates:
@@ -149,7 +154,7 @@ def main():
 
             dtw_short = np.array(model_dic[key],float)
             #dtw_short[:,0] = helper.normalization(dtw_short[:,0], "z_score")
-            dtw_short[:,1] = dtw_short[:,1]/sqrt(np.std(dtw_short[:,0]))
+            #dtw_short[:,1] = dtw_short[:,1]/sqrt(np.std(dtw_short[:,0]))
 
             #print("dtw_short")
             dtw_short = np.array(dtw_short)
@@ -163,14 +168,19 @@ def main():
             timer_start = timeit.default_timer()
             #dtw_long = np.repeat(dtw_long,3)
             #dtw_long = dtw_long[abs(dtw_long)-3 < 0]
-            path1 , score1 = 'NA','NA'#dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")[0:2]
-            path2 , score2 = dtw_local_alignment(
-                dtw_long, dtw_short, dist_type = "log_likelihood")[0:2]
-            path3 , score3 = 'NA','NA'#dtw_local_alignment（dtw_long, dtw_short, dist_type = 'manhattan')[0:2]
-            outf.write(',{},{},{}'.format(score1,score2,score3))
+            path1 , score1 = 'NA','NA'
+            #path1 , score1 = dtw_local_alignment(dtw_long, dtw_short, dist_type = "z_score")[0:2]
+            #path2 , score2 = 'NA','NA'
+            path2 , score2 = dtw_local_alignment(dtw_long, dtw_short, dist_type = "log_likelihood")[0:2]
+            #likelihood, unmatched = dist_to_likelihood(dtw_long, dtw_short, path2, dist_type = "log_likelihood")
+            likelihood, unmatched = dist_to_likelihood_flipped(dtw_short, dtw_long, path2, dist_type = "log_likelihood")    
+            #new_path2, likelihood=dist_to_likelihood_flipped_new_path(dtw_short, dtw_long, path2, dist_type = "log_likelihood")
+            path3 , score3 = 'NA','NA'
+            #path3 , score3 = dtw_local_alignment(dtw_long, dtw_short, dist_type = 'manhattan')[0:2]
+            #outf.write(',{},{},{}'.format(score1,score2,score3))
+            outf.write(',{},{},{}'.format(likelihood,score2,unmatched))
             timer_stop = timeit.default_timer()
             runtime = timer_stop - timer_start
-            
 
             # ploting 
             if False:

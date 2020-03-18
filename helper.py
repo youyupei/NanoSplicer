@@ -96,7 +96,7 @@ def get_junction_signal_by_pos(fast5, junction_pos = None,
 
 	'''
 	
-	if start_pos and start_pos:
+	if start_pos and end_pos:
 		junction_bases_start, junction_bases_end = start_pos, end_pos
 		window = end_pos - start_pos
 	elif junction_pos and window:
@@ -330,7 +330,7 @@ class Fast5Class(object):
 		return read_id
 		
 	def get_signal(self, start = None, end = None, normalization = True,\
-	 rm_outlier = True):
+	 rm_outlier = False):
 
 		start = int(start) if start else 0
 		end = int(end) if end else -1
@@ -353,7 +353,7 @@ class Fast5Class(object):
 			signal = signal[start:end]
 			signal = self.remove_outlier(signal, thresh = 3)
 			return(signal)
- 
+
 		return(signal[start:end])
 
 	def get_alignment(self, output=None):
