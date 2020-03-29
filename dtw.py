@@ -57,11 +57,11 @@ def cost(x, *y, dist_type = None, upper = np.inf):
     def log_likelihood(a, b_mean, b_std, upper = upper):
         diff = min(abs(a-b_mean), upper)
         z = diff/b_std
-        #return -(log(1/sqrt(2*pi)) - z**2/2)
-        return 0.9189385 +  z**2/2
-        #return 0.9189385 +  z**2/2 + log(b_std)
         
-        #return 0.6931472+log(1+z**2)
+    # f(z)
+        return 0.9189385 +  z**2/2
+    # f(x|mean,st)
+        #return 0.9189385 +  z**2/2 + log(b_std)
     
 
     y_len = len(y)
