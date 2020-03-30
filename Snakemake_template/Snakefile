@@ -1,0 +1,197 @@
+# this is a Snakefile
+import os
+from config import *
+ 
+rule all:
+    input:
+        #expand( "Candidates/{transcriptID}_candidate.txt", transcriptID = trID)
+        #expand( "flag/{transcriptID}_score" +SUFFIX + ".done", transcriptID = trID)
+        expand("BED/transcript_ID/{transcriptID}.bed",transcriptID = trID)
+'''
+rule fast5_index:
+    input:
+        FAST5_DIR
+    output:
+        INDEX_FILE
+    shell:
+        "cd {input} &&"
+        "find -name *fast5 | sed 's/\.\///g' > {output}"
+'''
+
+# for performance evaluation
+rule map_transcript:
+    # map all reads to the transcript reference to collect the corresponding reads.
+    input:
+        ref = REF_TRANSCRIPT,
+        fastq = expand(FASTQ_PATH + '/{fq}', fq=os.listdir(FASTQ_PATH))
+    output:
+        "BAM/transcript_map.sorted.bam"
+    threads: THREAD
+    shell:
+        "mkdir -p BAM;"
+        "minimap2 -ax map-ont -t {threads} {input.ref} {input.fastq} | "
+        "samtools sort -o {output} -T reads.tmp &&"
+        "samtools index {output}"
+        #(mapped filter)samtools view -b -F 4 transcript_map.sorted.bam
+
+rule map_genome:
+    # map all reads to the transcript reference to collect the corresponding reads.
+    input:
+        ref = REF_GENOME,
+        fastq = expand(FASTQ_PATH + '/{fq}', fq=os.listdir(FASTQ_PATH))
+    params:
+        splice_param = MAP_CANONICAL
+    output:
+        "BAM/genome_map.sorted.bam"
+    threads: THREAD
+    shell:
+        "mkdir -p BAM;"
+        "minimap2 -ax splice -t {threads} -k 14 {params.splice_param} {input.ref} {input.fastq} | "
+        "samtools sort -o {output} &&"
+        "samtools index {output}"
+
+rule bam_mapped_filter:
+    input:
+        "BAM/{BAM}.sorted.bam"
+    output:
+        mapped = "BAM/{BAM}.sorted_mapped_subset.bam"
+    params:
+        map_qual_thres = MIN_MAPQ
+    shell:
+        '''
+        samtools view -b -F 4 -q 60 {input} > {output.mapped}
+        samtools index {output.mapped}
+        rm {input}
+        rm {input}.bai
+        '''
+
+# for performance evaluation
+rule gtf_to_bed:
+    input:
+        gtf = TRANSCRIPT_ANNOTATION
+    output:
+        gtf = "BED/annotation.bed"
+    shell:
+        "mkdir -p BED;" +
+        PAFTOOLS + "gff2bed {input.gtf} > {output.gtf}"
+
+rule bam_to_bed:
+    input:
+        genome_bam = "BAM/genome_map.sorted_mapped_subset.bam",
+        transcript_bam = "BAM/transcript_map.sorted_mapped_subset.bam"
+    output:
+        bed = "BED/transcript_ID/{transcriptID}.bed"
+        sam = "BAM/transcript_ID/{transcriptID}.sam"
+    shell:
+        '''
+        mkdir -p BED/transcript_ID
+        mkdir -p BAM/transcript_ID/
+        samtools view {input.transcript_bam} {wildcards.transcriptID} | cut -d$'\t' -f1 > BED/transcript_ID/{wildcards.transcriptID}_IDs.txt
+        samtools view {input.genome_bam} | fgrep -w -f BED/transcript_ID/{wildcards.transcriptID}_IDs.txt >  {output.sam} || echo 1 
+        if [ -s  {output.sam} ]
+        then  
+        '''
+         + PAFTOOLS + "splice2bed {output.sam} > {output.bed}"
+
+        '''
+        else
+            touch {output.bed}
+            touch {output.sam}
+        fi
+        rm BED/transcript_ID/{wildcards.transcriptID}_IDs.txt || exit
+        '''
+
+rule candidate_generate:
+    #generate candidate file (txt)
+    #each row contains candidates for each splicing site in the given transcript
+    #the first one in each row is the true one
+    input:
+        ref = REF_GENOME,
+        bam_bed = "BED/transcript_ID/{transcriptID}.bed",
+        anotate_bed="BED/annotation.bed"
+    output:
+        "Candidates/{transcriptID}_candidate.txt"
+    params:
+        script = PY_Candidates_from_gtf,
+        search_win = SEARCH_WIN, # window size of candidate splicing site searching
+        accept_thres = ACCEPT_THRES, # minimum support  # best supported site:
+        flank_size = FLANK_SIZE
+
+    shell:
+        '''
+        mkdir -p Candidates
+        if [ -s {input.bam_bed} ]
+        then
+            grep {wildcards.transcriptID} {input.anotate_bed} | python3 {params.script}\
+            {params.search_win} {params.accept_thres} {params.flank_size}\
+             {input.ref} {input.bam_bed} > {output}
+        else
+            touch {output}
+        fi
+        '''
+
+rule evaluation:
+    input:
+        index = INDEX_FILE,
+        cadidates = "Candidates/{transcriptID}_candidate.txt",
+        gtf_to_bed = "BED/annotation.bed",
+        mapping_sam = "BAM/transcript_ID/{transcriptID}.sam"
+    output:
+        file=touch("flag/{transcriptID}_score" +SUFFIX + ".done")
+
+    params: 
+        script = PY_validation,
+        sequencing_summary = SEQUENCING_SUMMARY,
+        fast5_dir = FAST5_DIR,
+        output_dir_name = "Validation/score" + SUFFIX,
+        trim_signal = TRIM_SIGNAL,
+        trim_model = TRIM_MODEL,
+        dtw_adj = '-a' if DTW_ADJ else ''
+
+    shell:
+        '''
+        mkdir -p {params.output_dir_name}
+        total=$(wc {input.mapping_sam} | cut -f1 -d' ')
+        count=0
+        temp_function () {{
+            count=$(($count+1))
+            sam_line=$1
+            local read_id=$(echo "$sam_line" | cut -f1)
+            #echo searching read $read_id
+            fast5_name=$(grep $read_id {params.sequencing_summary} | cut -d$'\t' -f1) || true
+            fast5={params.fast5_dir}/$(grep $fast5_name {input.index}) || true
+            if [[ $fast5 == *"fast5" ]]
+            then
+                python3 {params.script} -s "$sam_line" -o {params.output_dir_name}/{wildcards.transcriptID}_$read_id.csv \
+                 -c {input.cadidates} -T {params.trim_model} -t {params.trim_signal} {params.dtw_adj} $fast5
+            else
+                echo fast5 file does not exist!
+            fi
+
+            if [[ $((count % 10)) -eq 0 ]]
+            then
+                echo finished:$count out of $total reads
+            fi
+        }}
+        cat {input.mapping_sam} | while read line
+        do
+        temp_function "$line" 
+        done
+        #wait
+        '''
+'''
+rule get_prediction_accuracy_per_site:
+    input:
+        "flag/{transcriptID}_score" +SUFFIX + ".done"
+
+    output:
+        "Validation/correct_prodiction" + SUFFIX + "/{transcriptID}.csv"
+    params:
+        validation_dir_name = "Validation/score" + SUFFIX
+    shell:
+        "mkdir -p  Validation/correct_prodiction" + SUFFIX + ";"
+        
+        """
+        Rscript Script/validation.R {wildcards.transcriptID} {params.validation_dir_name} $(cat Candidates/{wildcards.transcriptID}_candidate.txt | sed "s/.*,//") {output} || true
+        """
+'''

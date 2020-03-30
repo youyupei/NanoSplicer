@@ -12,7 +12,7 @@ from math import sqrt
 import helper
 from helper import expect_squiggle_dict
 from helper import parse_candidate_file
-
+import junction_squiggle_selection
 
 from dtw import dtw_local_alignment_max_mean as dtw_mean
 #from dtw_cy.dtw import dtw_local_alignment_max_sum as dtw_sum
@@ -38,9 +38,9 @@ def parse_arg():
         sys.exit(0)
     
     try: 
-        opts, args = getopt.getopt(argv[1:],"ho:c:T:t:ab:",
+        opts, args = getopt.getopt(argv[1:],"ho:c:T:t:ab:s:",
                     ["help=","output_csv=", "candidate_file=",\
-                    "trim_model=","trim_signal=","dtw_adj","bandwidth="])
+                    "trim_model=","trim_signal=","dtw_adj","bandwidth=","SAM="])
     except getopt.GetoptError:
         print_help()
         sys.exit(0)
@@ -66,6 +66,8 @@ def parse_arg():
             output_file = arg
         elif opt in ("-c", "--candidate_file"):
            candidate_file = arg
+        elif opt in ("-s", "--SAM"):
+           sam_line = arg
         elif opt in ("-T", "--trim_model"):
            trim_model = int(arg)
         elif opt in ("-t", "--trim_signal"):
@@ -74,6 +76,7 @@ def parse_arg():
            dtw_adj = True
         elif opt in ("-b", "--bandwidth"):
            bandwidth = float(arg)
+
 
     # choose the version of dtw (sum: minimize the sum of cost for the path)
     dtw_local_alignment = dtw_mean if dtw_adj else dtw_sum
@@ -84,11 +87,11 @@ def parse_arg():
             dist_type = dist_type, upper = upper)
     
     return fast5_filename, output_file, candidate_file,\
-     dtw_local_alignment, trim_model, trim_signal
+     dtw_local_alignment, trim_model, trim_signal, sam_line
 
 def main():
     fast5_filename, output_file, candidate_file, \
-        dtw_local_alignment, trim_model, trim_signal = parse_arg()
+        dtw_local_alignment, trim_model, trim_signal, sam_line = parse_arg()
     
     # get read id
     #########################################################
@@ -103,25 +106,70 @@ def main():
     
     outf.write('\n'+ fast5_filename)
     '''
-
     candidates = parse_candidate_file(candidate_file)
 
-    try:
-        strand = helper.Fast5Class(fast5_filename).get_alignment(
-            "mapping_info")["mapped_strand"]
-    except:
+    # read line in sam file
+    sam_flag, mapped_pos0, cigar = [sam_line.strip().split('\t')[index] for index in [1,3,5]]
+
+    # 1-based to 0-based
+    mapped_pos0 -= 1
+
+    # determine strand
+    if sam_flag == "0":
+        strand = "+"
+    elif sam_flag == "16"
+        strand = "-"
+    else:
+        print("Error: Abnormal mapped reads.")
         sys.exit(0)
 
+
+    # tombo resquiggle
+    tombo_results, tombo_start_clip, tombo_end_clip = tombo_squiggle_to_basecalls(fast5_filename)
+    read_length = len(tombo_results.genome_seq) + tombo_start_clip + tombo_end_clip
+    normalised_raw_signal = tombo_results.raw_signal/1.4826
+    # genome pos to read pos mapping vector
+    g_r_mapping = genome_to_read_pos_conversion(cigar)
 
     for candidate in candidates:
         outf.write(fast5_filename + ',' + strand + ',')
         
+        # take reverse compliment seq if nesseccary
+        if strand == "-":
+            candidate.sequences = [helper.reverse_complement(s)
+             for s in candidate.sequences]
+
+        # trim signal
+        candidate.start += trim_signal
+        candidate.end -= trim_signal
+        # convert to read relative pos (forward direction)
+        if candidate.start - mapped_pos0 >= 0:
+            candidate.start = g_r_mapping[candidate.start - mapped_pos0]
+            if g_r_mapping[candidate.start - mapped_pos0] == \
+                g_r_mapping[candidate.start - mapped_pos0 - 1]:
+                candidate.start += 1 
+        else: 
+            print("candidate start pos out of bound.")
+            continue
+
+        if candidate.end- mapped_pos0 <= g_r_mapping[-1] + 1:
+            candidate.end = g_r_mapping[candidate.end - mapped_pos0]
+        else:
+            print("candidate end pos out of bound.")
+            continue
+
+
         # get signal
-        signal = helper.get_junction_signal_by_pos(
-            fast5 = fast5_filename, start_pos = candidate.start + trim_signal,
-             end_pos = candidate.end - trim_signal)
+        if strand == "+":
+            seg_start = max(tombo_results.segs[candidate.start] - tombo_start_clip, 0)
+            seg_end = tombo_results.segs[candidate.end] - tombo_start_clip + 1
+            
+        elif strand == "-":
+            seg_start = max(tombo_results.segs[read_length - candidate.end -1] - tombo_start_clip, 0)
+            seg_end = tombo_results.segs[read_length - candidate.start - 1] - tombo_start_clip + 1
 
 
+        signal = normalised_raw_signal[tombo_results.segs[seg_start]:tombo_results.segs[seg_enduni]]
 
         if not len(signal):
             for i in range(len(candidate.sequences)):
@@ -129,11 +177,6 @@ def main():
             outf.write("\n")
             print("read discarded")
             continue
-        # take reverse compliment seq if nesseccary
-        
-        if strand == "-":
-            candidate.sequences = [helper.reverse_complement(s)
-             for s in candidate.sequences]
 
 ########################################delete later######################################
  #       with open("squiggle.csv", 'a') as squiggle_f:

@@ -34,6 +34,8 @@ def tombo_squiggle_to_basecalls(read_fast5_fn):
 
     # prep tombo objects
     std_ref = tombo_stats.TomboModel(seq_samp_type=seq_samp_type)
+    start_clip = std_ref.central_pos
+    end_clip = std_ref.kmer_width - std_ref.central_pos - 1
     rsqgl_params = tombo_stats.load_resquiggle_parameters(seq_samp_type)
 
     # extract raw signal
@@ -53,7 +55,7 @@ def tombo_squiggle_to_basecalls(read_fast5_fn):
     rsqgl_results = resquiggle.resquiggle_read(
         map_results, std_ref, rsqgl_params, all_raw_signal=all_raw_signal)
 
-    return rsqgl_results
+    return rsqgl_results, start_clip, end_clip
 
 
 def genome_to_read_pos_conversion(cigar):

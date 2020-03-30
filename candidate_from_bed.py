@@ -6,7 +6,10 @@ input:
     3 splic bed file from mapping
 '''
 import numpy as np
-import itertools, sys, os, re
+import itertools
+import sys
+import os
+import re
 from collections import defaultdict
 import helper
 
@@ -43,28 +46,33 @@ def ReadBedLine(bedline):
     
     junction_pos = junction_pos[1:]
 
-    return name, strand, splice_sites, junction_pos
+    transcript_length = sum(blockSizes)
+
+    return name, strand, splice_sites, junction_pos, transcript_length
         
-
-
-def splice_site_to_seq(splice_site, genome_ref, window = 30 , strand = "+", start = None, end = None): 
+def splice_site_to_seq(splice_site, genome_ref, window = None , strand = "+", start = None, end = None): 
     '''
     input:
         splice_site: a splice site <tuple>
         genome_ref: <str>
     '''
 
-    junction_bases_start = splice_site[0] - int(np.floor(window/2))
-    junction_bases_end = splice_site[1] + int(np.ceil(window/2))
-
-    if start:
+    if start and end:
         junction_bases_start = start
-    if end: 
-        junction_bases_end = end
+        junction_bases_end = end  
+    
+    elif window:
+        junction_bases_start = splice_site[0] - int(np.floor(window/2))
+        junction_bases_end = splice_site[1] + int(np.ceil(window/2))
+
+    else:
+        raise ValueError("Missing valid junction boundary!")
+        sys.exit(0)
+
 
     if junction_bases_start < 0 or junction_bases_end > len(genome_ref) + 1:
-        print("Error: Specified Exon Junction goes outside of the Genome!\n")
-        return 1
+        raise ValueError("Specified Exon Junction goes outside of the Genome!\n")
+        sys.exit(0)
     return genome_ref[junction_bases_start:splice_site[0]] + \
                 genome_ref[splice_site[1] : junction_bases_end]
     '''
@@ -77,6 +85,7 @@ def splice_site_to_seq(splice_site, genome_ref, window = 30 , strand = "+", star
             genome_ref[junction_bases_start:splice_site[0]] + \
             genome_ref[splice_site[1] : junction_bases_end])
     '''
+
 def check_exon(pos1, bedline):
     bedline = bedline.strip().split()
     chrom, chromStart, chromEnd, name, score, strand, thickStart,\
@@ -126,7 +135,8 @@ def count_splice_site_supports(bedfile, ref_trans_strand):
     count_intron_mapping = defaultdict(int)
     with open(bedfile, "r") as bf:
         for line in bf:
-            name, mapped_strand, splice_sites, junction_pos = ReadBedLine(line)
+            name, mapped_strand, splice_sites, junction_pos, transcript_length \
+             = ReadBedLine(line)
             #if ref_trans_strand != mapped_strand:
             #    continue
             for site in splice_sites:
@@ -164,66 +174,67 @@ class candidate_class:
             self.start = int(start)
             self.end = int(end)
             self.num_of_correct_supports = num_of_correct_supports
- 
-
 
 
 def main():
+    
     args = sys.argv
-    if len(args) < 2:
-        print("\n\nUsage: python3 {} <ref filename> <bed filename from bam>".format(argv[0]))
-        exit()
+    if len(args) < 6:
+        print("\n\nUsage: <line in bed12> | \
+        python3 {} <SEARCH_WIN> <ACCEPT_THRES> <FLANK_SIZE> <ref filename> <bed filename from bam>".format(argv[0]))
+        sys.exit(0)
     
-    #gtfbedline = sys.stdin
+    # gtfbedline = sys.stdin
     annotation_bedline = next(sys.stdin)
-    
-    genome_ref_filename, bambedfile = args[1:3]
+    search_win, accept_thres, flank_size,genome_ref_filename,\
+     bambedfile = args[1:6]
+    search_win, accept_thres, flank_size = int(search_win), int(accept_thres), int(flank_size)
+    #count support over whole genome
+    name, strand, annotated_sites, junction_pos, transcript_length \
+     = ReadBedLine(annotation_bedline)
+    count_intron_start, count_intron_end, count_intron_mapping=\
+        count_splice_site_supports(bambedfile, strand)
+
+
+    # Load reference.(Note: currently, all reads come from a single chr. Modification needed for real data analysis)
     with open(genome_ref_filename, 'r') as gf:
         next(gf)
         genome_ref = next(gf)
 
-      
-    name, strand, annotated_sites, junction_pos = ReadBedLine(annotation_bedline)
-
-    count_intron_start, count_intron_end, count_intron_mapping=\
-        count_splice_site_supports(bambedfile, strand)
-
+    # candidates: [<class:candidate_class>,...]
     candidates = []
+    
     for site in annotated_sites:
-        candidate_splice_site_list = [site]
-        # best supported sites:
-        search_win = 20
-        flank_size = 10 #each side
-        accept_thres = 3
+        
+        # init the list with annotated site
+        candidate_splice_site_list = []
 
+        # init the count with minimum accept thres
         best_supported_count = accept_thres
         best_supported_site = []
         
-        
+        # loop over combination of sites in upstream and downstream search win
         for counted_site in itertools.product(range(site[0] - int(np.floor(search_win/2)),site[0] + 1),\
               range(site[1], site[1] + int(np.ceil(search_win/2)) + 1)):
-        
+            
             if counted_site == site:
                 continue
             
             if count_intron_mapping[counted_site] >= best_supported_count:
                 best_supported_count = count_intron_mapping[counted_site]
-                best_supported_site.append(counted_site)
+                best_supported_site = [counted_site]
 
 
-        candidate_splice_site_list += best_supported_site +\
+        candidate_splice_site_list = [site] + best_supported_site +\
          search_potential_canonical_sites(site, window = search_win, genome_ref = genome_ref, strand = strand)
-
-
         candidate_splice_site_list = list(set(candidate_splice_site_list))
+        
+        # put the true one at the top of the list
         true_index = candidate_splice_site_list.index(site)
         candidate_splice_site_list[0], candidate_splice_site_list[true_index] =\
         candidate_splice_site_list[true_index], candidate_splice_site_list[0]
 
-
-
-        # generate candidate
-        
+        # generate candidate for sites
         candidate = candidate_class(num_of_correct_supports = count_intron_mapping[site])
         candidate.start = min([x for x,y in candidate_splice_site_list]) - flank_size
         candidate.end = max([y for x,y in candidate_splice_site_list]) + flank_size
@@ -239,25 +250,25 @@ def main():
          for x in candidate_splice_site_list]
         
         # convert to transcript related pos
-        candidate.start = genome_pos_to_transcript_pos(candidate.start, annotation_bedline)
-        candidate.end = genome_pos_to_transcript_pos(candidate.end, annotation_bedline)
+        # candidate.start = genome_pos_to_transcript_pos(candidate.start, annotation_bedline)
+        # candidate.end = genome_pos_to_transcript_pos(candidate.end, annotation_bedline)
         
         candidates.append(candidate)
 
     if strand  == '+':
-
         for candidate in candidates:
             print(','.join(candidate.sequences) + ",{},{},{}".format( candidate.start,\
                 candidate.end,candidate.num_of_correct_supports))
     
     elif strand == '-':
         for candidate in candidates:
-            print(','.join([helper.reverse_complement(s) for s in candidate.sequences]) + ",{},{},{}".format( -candidate.start,\
-                -candidate.end,candidate.num_of_correct_supports))
+            print(','.join([helper.reverse_complement(s) \
+             for s in candidate.sequences]) + ",{},{},{}".format( \
+            transcript_length-candidate.end, transcript_length-candidate.start \
+            ,candidate.num_of_correct_supports))
 
     
     return None
-
 
 if __name__ == '__main__':
     main()
