@@ -1,48 +1,15 @@
 '''
 apply dynamic time warping to 2 time series
 '''
-
 import numpy as np
 from numpy import exp, pi, sqrt, log
-from scipy.stats import poisson
+#from scipy.stats import poisson
 
 import matplotlib.pyplot as plt
 
-
-# require fastdtw to be installed 
-# "pip install fastdtw"
-#from fastdtw import fastdtw
-''' 
-    fastdtw(x, y, radius=1, dist=None)      
-
-    return the approximate distance between 2 time series with O(N)
-        time and memory complexity
-        Parameters
-        ----------
-        x : array_like
-            input array 1
-        y : array_like
-            input array 2
-        radius : int
-            size of neighborhood when expanding the path. A higher value will
-            increase the accuracy of the calculation but also increase time
-            and memory consumption. A radius equal to the size of x and y will
-            yield an exact dynamic time warping calculation.
-        dist : function or int
-            The method for calculating the distance between x[i] and y[j]. If
-            dist is an int of value p > 0, then the p-norm will be used. If
-            dist is a function then dist(x[i], y[j]) will be used. If dist is
-            None then abs(x[i] - y[j]) will be used.
-        Returns
-        -------
-        distance : float
-            the approximate distance between the 2 time series
-        path : list
-            list of indexes for the inputs x and y
-'''
-
 def cost(x, *y, dist_type = None, upper = np.inf):
     '''
+    Define the cost function in DTW
     input:
         two float when dist_type = "manhattan"
         three float: x, y_mean, y_std when dist_type = "z_score"
@@ -55,6 +22,9 @@ def cost(x, *y, dist_type = None, upper = np.inf):
         return diff/b_std
 
     def log_likelihood(a, b_mean, b_std, upper = upper):
+        '''
+        negative log likelihood by assuming normal distribution
+        '''
         diff = min(abs(a-b_mean), upper)
         z = diff/b_std
         
@@ -62,31 +32,32 @@ def cost(x, *y, dist_type = None, upper = np.inf):
         return 0.9189385 +  z**2/2
     # f(x|mean,st)
         #return 0.9189385 +  z**2/2 + log(b_std)
-    
 
-    y_len = len(y)
-    if y_len not in (1,2):
-        exit("FATAL!: unexpected input in distance matrics.")
+    if len(y) not in (1,2):
+        print("Error: unexpected input in distance matrics.")
+        sys.exit(1)
     if dist_type == None:
-        dist_type = "manhattan" if y_len == 1 else "log_likelihood" 
-    if dist_type not in ("manhattan", "z_score", "log_likelihood"):
-        exit("FATAL: can't recognise the distance matrics ['manhattan', 'z_score', 'log_likelihood'],")
+        dist_type = "manhattan" if len(y) == 1 else "log_likelihood" 
 
     if dist_type == "manhattan":
         return manhattan(x, y[0])
-
-    if dist_type == "z_score":
+    elif dist_type == "z_score":
         return z_score(x, y[0], y[1])
-
-    if dist_type == "log_likelihood":
+    elif dist_type == "log_likelihood":
         return log_likelihood(x, y[0], y[1])
+    else:
+        print("Error: can't recognise the distance matrics ['manhattan', 'z_score', 'log_likelihood']")
+        sys.exit(1)
 
 
+##############################################################################
+#        Version1: short: candidate squiggle, long: junction squiggle
+##############################################################################
 def dtw_local_alignment_max_sum(long, short, radius = None, \
             dist_type = None, upper = np.inf):
-
-
-
+    '''
+    Finding best alinment that maximize the sum of the cost along the path
+    '''
     short_len = len(short)
     long_len = len(long)
     cum_matrix = np.zeros((short_len + 1, long_len + 1))
@@ -99,15 +70,13 @@ def dtw_local_alignment_max_sum(long, short, radius = None, \
     (cum_matrix[i,j]) came from the cum_matrix[i-1,j], cum_matrix[i - 1,j - 1],
      and cum_matrix[i, j - 1] respectively.
     '''
-    
     for i in range(1, short_len + 1):
         for j in range(1, long_len + 1):
 
             pre_values = (cum_matrix[i-1,j], 
                         cum_matrix[i - 1,j - 1],
                         cum_matrix[i, j - 1])
-            
-            
+
             #pre_step_matrix[i, j] = np.argmin(pre_values)
             pre_step_matrix[i, j] = np.random.choice(\
                             np.where(pre_values==min(pre_values))[0])
@@ -121,8 +90,6 @@ def dtw_local_alignment_max_sum(long, short, radius = None, \
     #traced_long_index = np.argmin(cum_matrix[-1:])
     traced_long_index = np.random.choice(\
                 np.where(cum_matrix[-1,:]==min(cum_matrix[-1,:]))[0])
-    
-
 
     #plt.plot(cum_matrix[-1:][0])
     #plt.savefig('path_score.png')
@@ -143,8 +110,12 @@ def dtw_local_alignment_max_sum(long, short, radius = None, \
     best_path = np.array(best_path)
     return best_path[::-1], best_score/len(best_path[::-1]),cum_matrix
 
+
 def dtw_local_alignment_max_mean(long, short, radius = None, dist_type = None, \
          upper = np.inf):
+    '''
+    Finding best alinment that maximize the average cost along the path
+    '''
 
     short_len = len(short)
     long_len = len(long)
@@ -208,9 +179,6 @@ def dtw_local_alignment_max_mean(long, short, radius = None, dist_type = None, \
 
     return best_path[::-1], best_score,mean_matrix[:,:,0]
 
-
-
-
     best_score = min(mean_matrix[-1,:,0])
     best_path = []
   
@@ -239,11 +207,11 @@ def dtw_local_alignment_max_mean(long, short, radius = None, dist_type = None, \
 
     return best_path[::-1], best_score,mean_matrix[:,:,0]
 
-
-
 def dtw_global_alignment_max_sum(seq1, seq2, radius = None, \
             dist_type = None, upper = np.inf):
-
+    '''
+    Finding best global alinment that maximize the sum of the cost along the path
+    '''
 
     # init accumulated matrix
     seq2_len = len(seq2)
@@ -277,15 +245,10 @@ def dtw_global_alignment_max_sum(seq1, seq2, radius = None, \
                         cost(seq1[j -1], *seq2[i - 1], dist_type = dist_type)
     best_score = cum_matrix[-1,-1]
     best_path = []
-  
 
     # init trace back index
     traced_seq1_index = seq1_len
     traced_seq2_index = seq2_len
-
-    
-
-
     #plt.plot(cum_matrix[-1:][0])
     #plt.savefig('path_score.png')
 
@@ -307,6 +270,9 @@ def dtw_global_alignment_max_sum(seq1, seq2, radius = None, \
 
 def dtw_local_alignment_max_sum_band(long, short, band_prop = 0.4, \
             dist_type = None, upper = np.inf):
+    '''
+    Finding best alinment that maximize the sum of the cost along the banded path
+    '''
 
     short_len = len(short)
     long_len = len(long)
@@ -346,9 +312,6 @@ def dtw_local_alignment_max_sum_band(long, short, band_prop = 0.4, \
     #traced_long_index = np.argmin(cum_matrix[-1:])
     traced_long_index = np.random.choice(\
                 np.where(cum_matrix[-1,:]==min(cum_matrix[-1,:]))[0])
-    
-
-
     #plt.plot(cum_matrix[-1:][0])
     #plt.savefig('path_score.png')
 
@@ -369,11 +332,11 @@ def dtw_local_alignment_max_sum_band(long, short, band_prop = 0.4, \
     return best_path[::-1], best_score/len(best_path[::-1]),cum_matrix
 
 
-
+##############################################################################
+#        Version2: short: junction squiggle, long: candidate squiggle
+##############################################################################
 def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
             dist_type = None, upper = np.inf):
-    
-
 
     #flip long and short
     long, short = short, long
@@ -431,6 +394,13 @@ def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
     best_path = np.array(best_path)
     return best_path[::-1], best_score/len(best_path[::-1]),cum_matrix
 
+
+
+
+##############################################################################
+#                           likelihood calculation
+##############################################################################
+
 def dist_to_likelihood(long, short, path, dist_type = None):
     pre_long = path[0][1]# first long index
     num_of_match = 0
@@ -481,8 +451,6 @@ def dist_to_likelihood_flipped_new_path(long, short, path, dist_type = None):
     log_likelihood += min(log_density_list)
     new_path.append([short_index, multi_long[log_density_list.index(min(log_density_list))]])
     return new_path, log_likelihood
-
-
 
 def dist_to_likelihood_flipped_time_serie(long, short, path, dist_type = None):
     num_of_match = 0

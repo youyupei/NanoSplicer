@@ -255,19 +255,23 @@ def main():
         
         candidates.append(candidate)
 
-    if strand  == '+':
-        for candidate in candidates:
-            print(','.join(candidate.sequences) + ",{},{},{}".format( candidate.start,\
-                candidate.end,candidate.num_of_correct_supports))
-    
-    elif strand == '-':
-        for candidate in candidates:
-            print(','.join([helper.reverse_complement(s) \
-             for s in candidate.sequences]) + ",{},{},{}".format( \
-            transcript_length-candidate.end, transcript_length-candidate.start \
-            ,candidate.num_of_correct_supports))
 
-    
+    for candidate in candidates:
+        print(','.join(candidate.sequences) + ",{},{},{}".format( candidate.start,\
+            candidate.end,candidate.num_of_correct_supports))
+
+
+    #if strand  == '+':
+    #    for candidate in candidates:
+    #        print(','.join(candidate.sequences) + ",{},{},{}".format( candidate.start,\
+    #            candidate.end,candidate.num_of_correct_supports))
+#
+    #elif strand == '-':
+    #    for candidate in candidates:
+    #        print(','.join([helper.reverse_complement(s) \
+    #            for s in candidate.sequences]) + ",{},{},{}".format( \
+    #        transcript_length-candidate.end, transcript_length-candidate.start \
+    #        ,candidate.num_of_correct_supports))
     return None
 
 if __name__ == '__main__':

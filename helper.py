@@ -266,6 +266,7 @@ def parse_candidate_file(filename):
 				sys.exit(0)
 	return candidate_list
 
+
 def plot_dtw_alignment( long_seq, short_seq, dtw_path, dtw_score = None, \
 	show_sd = True, figure_name = "Untitled", \
 	figure_title = "Untitled",**plot_args):

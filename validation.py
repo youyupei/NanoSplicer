@@ -4,6 +4,7 @@ import getopt
 import timeit
 import os
 import numpy as np
+import re
 
 
 from math import sqrt
@@ -109,15 +110,17 @@ def main():
     candidates = parse_candidate_file(candidate_file)
 
     # read line in sam file
+#
+#   print(sam_line)
     sam_flag, mapped_pos0, cigar = [sam_line.strip().split('\t')[index] for index in [1,3,5]]
-
+    mapped_pos0 = int(mapped_pos0)
     # 1-based to 0-based
     mapped_pos0 -= 1
 
     # determine strand
     if sam_flag == "0":
         strand = "+"
-    elif sam_flag == "16"
+    elif sam_flag == "16":
         strand = "-"
     else:
         print("Error: Abnormal mapped reads.")
@@ -125,15 +128,20 @@ def main():
 
 
     # tombo resquiggle
-    tombo_results, tombo_start_clip, tombo_end_clip = tombo_squiggle_to_basecalls(fast5_filename)
+    try:
+        tombo_results, tombo_start_clip, tombo_end_clip = \
+            junction_squiggle_selection.tombo_squiggle_to_basecalls(fast5_filename)
+    except:
+        print("tombo resquiggle failed!!")
+        sys.exit(0)
     read_length = len(tombo_results.genome_seq) + tombo_start_clip + tombo_end_clip
     normalised_raw_signal = tombo_results.raw_signal/1.4826
     # genome pos to read pos mapping vector
-    g_r_mapping = genome_to_read_pos_conversion(cigar)
+    g_r_mapping = junction_squiggle_selection.genome_to_read_pos_conversion(cigar)
 
     for candidate in candidates:
         outf.write(fast5_filename + ',' + strand + ',')
-        
+
         # take reverse compliment seq if nesseccary
         if strand == "-":
             candidate.sequences = [helper.reverse_complement(s)
@@ -141,35 +149,47 @@ def main():
 
         # trim signal
         candidate.start += trim_signal
+#   
+#        
+#        print(candidate.start, candidate.end, mapped_pos0, len(g_r_mapping),cigar)
         candidate.end -= trim_signal
         # convert to read relative pos (forward direction)
-        if candidate.start - mapped_pos0 >= 0:
-            candidate.start = g_r_mapping[candidate.start - mapped_pos0]
-            if g_r_mapping[candidate.start - mapped_pos0] == \
-                g_r_mapping[candidate.start - mapped_pos0 - 1]:
+        start_pos_rel_to_mapped_start = candidate.start - mapped_pos0
+        if  start_pos_rel_to_mapped_start >= 0:
+            candidate.start = g_r_mapping[start_pos_rel_to_mapped_start]
+            if g_r_mapping[start_pos_rel_to_mapped_start] == \
+                g_r_mapping[start_pos_rel_to_mapped_start - 1]:
                 candidate.start += 1 
-        else: 
+        else:
             print("candidate start pos out of bound.")
             continue
 
-        if candidate.end- mapped_pos0 <= g_r_mapping[-1] + 1:
-            candidate.end = g_r_mapping[candidate.end - mapped_pos0]
+        end_pos_rel_to_mapped_end = candidate.end- mapped_pos0
+        if end_pos_rel_to_mapped_end <= len(g_r_mapping):
+            candidate.end = g_r_mapping[end_pos_rel_to_mapped_end]
         else:
             print("candidate end pos out of bound.")
+#            print(candidate.start, candidate.end, mapped_pos0, g_r_mapping[-1])
             continue
 
 
         # get signal
         if strand == "+":
-            seg_start = max(tombo_results.segs[candidate.start] - tombo_start_clip, 0)
-            seg_end = tombo_results.segs[candidate.end] - tombo_start_clip + 1
+            seg_start = max(candidate.start - tombo_start_clip, 0)
+            seg_end = candidate.end - tombo_start_clip + 1
             
         elif strand == "-":
-            seg_start = max(tombo_results.segs[read_length - candidate.end -1] - tombo_start_clip, 0)
-            seg_end = tombo_results.segs[read_length - candidate.start - 1] - tombo_start_clip + 1
+            seg_start = max(read_length - candidate.end -1 - tombo_start_clip, 0)
+            seg_end = read_length - candidate.start - 1 - tombo_start_clip + 1
 
-
-        signal = normalised_raw_signal[tombo_results.segs[seg_start]:tombo_results.segs[seg_enduni]]
+#        
+        #print(candidate.sequences[0], strand)
+        #print(tombo_results.genome_seq[seg_start:seg_end + 1])
+        #print(tombo_results.genome_seq)
+        #print(re.search("CCCCGGGTCGC", tombo_results.genome_seq))
+        #print(seg_start, seg_end, len(normalised_raw_signal))
+        #exit(1)
+        signal = normalised_raw_signal[tombo_results.segs[seg_start]:tombo_results.segs[seg_end]+1]
 
         if not len(signal):
             for i in range(len(candidate.sequences)):
@@ -177,6 +197,10 @@ def main():
             outf.write("\n")
             print("read discarded")
             continue
+        
+        else:
+            print("pass")
+
 
 ########################################delete later######################################
  #       with open("squiggle.csv", 'a') as squiggle_f:
@@ -216,12 +240,12 @@ def main():
             #path2 , score2 = 'NA','NA'
             path2 , score2 = dtw_local_alignment(dtw_long, dtw_short, dist_type = "log_likelihood")[0:2]
             #likelihood, unmatched = dist_to_likelihood(dtw_long, dtw_short, path2, dist_type = "log_likelihood")
-            likelihood, unmatched = dist_to_likelihood_flipped(dtw_short, dtw_long, path2, dist_type = "log_likelihood")    
+            #likelihood, unmatched = dist_to_likelihood_flipped(dtw_short, dtw_long, path2, dist_type = "log_likelihood")    
             #new_path2, likelihood=dist_to_likelihood_flipped_new_path(dtw_short, dtw_long, path2, dist_type = "log_likelihood")
             path3 , score3 = 'NA','NA'
             #path3 , score3 = dtw_local_alignment(dtw_long, dtw_short, dist_type = 'manhattan')[0:2]
-            #outf.write(',{},{},{}'.format(score1,score2,score3))
-            outf.write(',{},{},{}'.format(likelihood,score2,unmatched))
+            outf.write(',{},{},{}'.format(score1,score2,score3))
+            #outf.write(',{},{},{}'.format(likelihood,score2,unmatched))
             timer_stop = timeit.default_timer()
             runtime = timer_stop - timer_start
 

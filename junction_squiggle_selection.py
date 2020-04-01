@@ -11,6 +11,7 @@ output:
 '''
 
 import h5py
+import re
 
 def tombo_squiggle_to_basecalls(read_fast5_fn):
     '''
@@ -25,7 +26,8 @@ def tombo_squiggle_to_basecalls(read_fast5_fn):
                 #   - read_start_rel_to_raw: start of rsqgl_results.raw_signal and rsqgl_results.segs within original all_raw_signal
                 #   - segs: start position for each model-able base (should be one longer than length of genome_seq to include last end point) 
     '''
-
+#
+    print(read_fast5_fn)
     from tombo import tombo_helper, tombo_stats, resquiggle
     # extract read info
     fast5_data = h5py.File(read_fast5_fn)
@@ -54,6 +56,7 @@ def tombo_squiggle_to_basecalls(read_fast5_fn):
     # align raw signal to basecalls
     rsqgl_results = resquiggle.resquiggle_read(
         map_results, std_ref, rsqgl_params, all_raw_signal=all_raw_signal)
+
 
     return rsqgl_results, start_clip, end_clip
 

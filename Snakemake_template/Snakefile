@@ -5,7 +5,7 @@ from config import *
 rule all:
     input:
         #expand( "Candidates/{transcriptID}_candidate.txt", transcriptID = trID)
-        #expand( "flag/{transcriptID}_score" +SUFFIX + ".done", transcriptID = trID)
+        #expand( ".flag/{transcriptID}_score" +SUFFIX + ".done", transcriptID = trID)
         expand("BED/transcript_ID/{transcriptID}.bed",transcriptID = trID)
 '''
 rule fast5_index:
@@ -17,6 +17,21 @@ rule fast5_index:
         "cd {input} &&"
         "find -name *fast5 | sed 's/\.\///g' > {output}"
 '''
+rule annotate_raw_with_fastqs:
+    # annotate raw FAST5s with FASTQ files produced from the same reads
+    # skip this step if raw read files already contain basecalls
+    input:
+        fastq = expand(FASTQ_PATH + '/{fq}', fq=os.listdir(FASTQ_PATH))
+    output:
+        touch(".flag/anotate_fq.done")
+    threads: THREAD
+    params:
+        fast5s_dir = FAST5_DIR
+    shell:
+        "mkdir -p .flag;"
+        "tombo preprocess annotate_raw_with_fastqs"
+        " --processes {threads} --fast5-basedir {params.fast5s_dir}"
+        " --fastq-filenames {input.fastq}"
 
 # for performance evaluation
 rule map_transcript:
@@ -80,7 +95,7 @@ rule bam_to_bed:
         genome_bam = "BAM/genome_map.sorted_mapped_subset.bam",
         transcript_bam = "BAM/transcript_map.sorted_mapped_subset.bam"
     output:
-        bed = "BED/transcript_ID/{transcriptID}.bed"
+        bed = "BED/transcript_ID/{transcriptID}.bed",
         sam = "BAM/transcript_ID/{transcriptID}.sam"
     shell:
         '''
@@ -137,7 +152,7 @@ rule evaluation:
         gtf_to_bed = "BED/annotation.bed",
         mapping_sam = "BAM/transcript_ID/{transcriptID}.sam"
     output:
-        file=touch("flag/{transcriptID}_score" +SUFFIX + ".done")
+        file=touch(".flag/{transcriptID}_score" +SUFFIX + ".done")
 
     params: 
         script = PY_validation,
@@ -159,7 +174,8 @@ rule evaluation:
             local read_id=$(echo "$sam_line" | cut -f1)
             #echo searching read $read_id
             fast5_name=$(grep $read_id {params.sequencing_summary} | cut -d$'\t' -f1) || true
-            fast5={params.fast5_dir}/$(grep $fast5_name {input.index}) || true
+            #fast5={params.fast5_dir}/$(grep $fast5_name {input.index}) || true
+            fast5=$(grep $fast5_name {input.index}) || true
             if [[ $fast5 == *"fast5" ]]
             then
                 python3 {params.script} -s "$sam_line" -o {params.output_dir_name}/{wildcards.transcriptID}_$read_id.csv \
@@ -182,7 +198,7 @@ rule evaluation:
 '''
 rule get_prediction_accuracy_per_site:
     input:
-        "flag/{transcriptID}_score" +SUFFIX + ".done"
+        ".flag/{transcriptID}_score" +SUFFIX + ".done"
 
     output:
         "Validation/correct_prodiction" + SUFFIX + "/{transcriptID}.csv"
