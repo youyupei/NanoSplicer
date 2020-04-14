@@ -134,8 +134,10 @@ def main():
     except:
         print("tombo resquiggle failed!!")
         sys.exit(0)
+    
     read_length = len(tombo_results.genome_seq) + tombo_start_clip + tombo_end_clip
     normalised_raw_signal = tombo_results.raw_signal/1.4826
+    
     # genome pos to read pos mapping vector
     g_r_mapping = junction_squiggle_selection.genome_to_read_pos_conversion(cigar)
 
@@ -155,18 +157,31 @@ def main():
         candidate.end -= trim_signal
         # convert to read relative pos (forward direction)
         start_pos_rel_to_mapped_start = candidate.start - mapped_pos0
-        if  start_pos_rel_to_mapped_start >= 0:
+        end_pos_rel_to_mapped_start = candidate.end- mapped_pos0
+        
+        if  start_pos_rel_to_mapped_start >= 0 and start_pos_rel_to_mapped_start < len(g_r_mapping):
             candidate.start = g_r_mapping[start_pos_rel_to_mapped_start]
-            if g_r_mapping[start_pos_rel_to_mapped_start] == \
+            
+            # discard junction squiggle with the queried motif start/end mapped to gaps
+            if candidate.start == -1:
+                print("Warning: Abnormal mapping, junction squiggle skipped.")
+                continue
+
+            elif g_r_mapping[start_pos_rel_to_mapped_start] == \
                 g_r_mapping[start_pos_rel_to_mapped_start - 1]:
                 candidate.start += 1 
         else:
             print("candidate start pos out of bound.")
             continue
 
-        end_pos_rel_to_mapped_end = candidate.end- mapped_pos0
-        if end_pos_rel_to_mapped_end <= len(g_r_mapping):
-            candidate.end = g_r_mapping[end_pos_rel_to_mapped_end]
+        
+        if end_pos_rel_to_mapped_start < len(g_r_mapping):
+            candidate.end = g_r_mapping[end_pos_rel_to_mapped_start - 1] + 1
+            
+            # discard junction squiggle with the queried motif start/end mapped to gaps
+            if candidate.end == -1 + 1:
+                print("Warning: Abnormal mapping, junction squiggle skipped.")
+                continue
         else:
             print("candidate end pos out of bound.")
 #            print(candidate.start, candidate.end, mapped_pos0, g_r_mapping[-1])
@@ -176,20 +191,16 @@ def main():
         # get signal
         if strand == "+":
             seg_start = max(candidate.start - tombo_start_clip, 0)
-            seg_end = candidate.end - tombo_start_clip + 1
+            seg_end = candidate.end - tombo_start_clip
             
         elif strand == "-":
             seg_start = max(read_length - candidate.end -1 - tombo_start_clip, 0)
-            seg_end = read_length - candidate.start - 1 - tombo_start_clip + 1
+            seg_end = read_length - candidate.start - 1 - tombo_start_clip
+        
+        # take into account the end clip
+        seg_end = min(seg_end, len(tombo_results.segs) - 1)
 
-#        
-        #print(candidate.sequences[0], strand)
-        #print(tombo_results.genome_seq[seg_start:seg_end + 1])
-        #print(tombo_results.genome_seq)
-        #print(re.search("CCCCGGGTCGC", tombo_results.genome_seq))
-        #print(seg_start, seg_end, len(normalised_raw_signal))
-        #exit(1)
-        signal = normalised_raw_signal[tombo_results.segs[seg_start]:tombo_results.segs[seg_end]+1]
+        signal = normalised_raw_signal[tombo_results.segs[seg_start]:tombo_results.segs[seg_end]]
 
         if not len(signal):
             for i in range(len(candidate.sequences)):
