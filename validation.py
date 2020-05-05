@@ -142,7 +142,7 @@ def main():
     g_r_mapping = junction_squiggle_selection.genome_to_read_pos_conversion(cigar)
 
     for candidate in candidates:
-        outf.write(fast5_filename + ',' + strand + ',')
+        outf.write(fast5_filename + ',' + strand)
 
         # take reverse compliment seq if nesseccary
         if strand == "-":
@@ -165,6 +165,7 @@ def main():
             # discard junction squiggle with the queried motif start/end mapped to gaps
             if candidate.start == -1:
                 print("Warning: Abnormal mapping, junction squiggle skipped.")
+                outf.write("\n")
                 continue
 
             elif g_r_mapping[start_pos_rel_to_mapped_start] == \
@@ -172,6 +173,7 @@ def main():
                 candidate.start += 1 
         else:
             print("candidate start pos out of bound.")
+            outf.write("\n")
             continue
 
         
@@ -181,10 +183,12 @@ def main():
             # discard junction squiggle with the queried motif start/end mapped to gaps
             if candidate.end == -1 + 1:
                 print("Warning: Abnormal mapping, junction squiggle skipped.")
+                outf.write("\n")
                 continue
         else:
             print("candidate end pos out of bound.")
 #            print(candidate.start, candidate.end, mapped_pos0, g_r_mapping[-1])
+            outf.write("\n")
             continue
 
 

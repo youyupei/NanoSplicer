@@ -72,6 +72,7 @@ def add_col_to_csv(col, input, output):
         return(1)
 
 def main():
+    csv_dir, out_dir = sys.argv[1:3]
     '''
     red bedline from transID.bed
     campare transID.bed with annotated.bed
@@ -79,10 +80,11 @@ def main():
     return:
         0/1 vector for each read
     '''
+    
     bed_files = os.listdir("transcript_ID")
     annotated_bed = "annotation.bed"
-    csv_dir = "/home/ubuntu/PhD_proj/pipeline_1.21/Validation/score_f20_ts6_t2_spikeT3_band_0.4_stand_likelihood_more_info_2_19"
-    out_dir = "/home/ubuntu/PhD_proj/pipeline_1.21/Validation/score_f20_ts6_t2_spikeT3_band_0.4_stand_likelihood_more_info_2_19_minimap"
+    #csv_dir = "/home/ubuntu/PhD_proj/no_trans_ref_pipeline/Validation/score_f20_ts6_t2_spikeT3_local_test"
+    #out_dir = "/home/ubuntu/PhD_proj/no_trans_ref_pipeline/Validation/score_f20_ts6_t2_spikeT3_local_test_minimap"
     
     for filename in bed_files:
         transID= filename[:-4]
