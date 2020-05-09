@@ -335,6 +335,66 @@ def dtw_local_alignment_max_sum_band(long, short, band_prop = 0.4, \
 ##############################################################################
 #        Version2: short: junction squiggle, long: candidate squiggle
 ##############################################################################
+#def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
+#            dist_type = None, upper = np.inf):
+#
+#    #flip long and short
+#    long, short = short, long
+#    short_len = len(short)
+#    long_len = len(long)
+#    band_len = int(np.ceil(long_len* band_prop))
+#    band_move = (long_len - band_len)/short_len
+#
+#    cum_matrix = np.full((short_len + 1, long_len + 1), np.inf)
+#    cum_matrix[0, 0:band_len+1] = 0
+#    
+#    pre_step_matrix = np.zeros((short_len + 1, long_len + 1), dtype = int)
+#    '''
+#    matrix for recording the best path. Each of the cells contains one of three
+#    possible integer: 0 ,1 ,2 indecating the corresponding value in cum_matrix
+#    (cum_matrix[i,j]) came from the cum_matrix[i-1,j], cum_matrix[i - 1,j - 1],
+#     and cum_matrix[i, j - 1] respectively.
+#    '''
+#    
+#    for i in range(1, short_len + 1):
+#
+#        j_start = int((i - 1) * band_move)
+#        for j in range(j_start, j_start + band_len):
+#
+#            pre_values = (cum_matrix[i-1,j], 
+#                        cum_matrix[i - 1,j - 1],
+#                        cum_matrix[i, j - 1])
+#            
+#            
+#            #pre_step_matrix[i, j] = np.argmin(pre_values)
+#            pre_step_matrix[i, j] = np.random.choice(\
+#                            np.where(pre_values==min(pre_values))[0])
+#
+#            cum_matrix[i, j] = min(pre_values) +\
+#                        cost(short[i -1], *long[j - 1], dist_type = dist_type)
+#    best_score = min(cum_matrix[-1,:])
+#    best_path = []
+#  
+#    traced_short_index = short_len
+#    #traced_long_index = np.argmin(cum_matrix[-1:])
+#    traced_long_index = np.random.choice(\
+#                np.where(cum_matrix[-1,:]==min(cum_matrix[-1,:]))[0])
+#
+#    while traced_short_index > 0:
+#
+#        best_path.append([traced_short_index, traced_long_index])
+#        pre_step = pre_step_matrix[traced_short_index, traced_long_index]
+#
+#        if pre_step in (0, 1):
+#            traced_short_index -= 1
+#        
+#        if pre_step in (1, 2):
+#            traced_long_index -= 1
+#    # best_path: 0-based coordinate on the (i+1)*(j+1) matrix
+#    best_path = np.array(best_path)
+#    return best_path[::-1], best_score/len(best_path[::-1]),cum_matrix
+
+
 def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
             dist_type = None, upper = np.inf):
 
@@ -343,7 +403,6 @@ def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
     short_len = len(short)
     long_len = len(long)
     band_len = int(np.ceil(long_len* band_prop))
-    band_move = (long_len - band_len)/short_len
 
     cum_matrix = np.full((short_len + 1, long_len + 1), np.inf)
     cum_matrix[0, 0:band_len+1] = 0
@@ -357,13 +416,10 @@ def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
     '''
     
     for i in range(1, short_len + 1):
-
-        j_start = int((i - 1) * band_move)
-        for j in range(j_start, j_start + band_len):
-
+        for j in range(1, long_len + 1):
+            
             pre_values = (cum_matrix[i-1,j], 
-                        cum_matrix[i - 1,j - 1],
-                        cum_matrix[i, j - 1])
+                        cum_matrix[i - 1,j - 1])
             
             
             #pre_step_matrix[i, j] = np.argmin(pre_values)
@@ -372,13 +428,14 @@ def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
 
             cum_matrix[i, j] = min(pre_values) +\
                         cost(short[i -1], *long[j - 1], dist_type = dist_type)
-    best_score = min(cum_matrix[-1,:])
+    
+    best_score = min(cum_matrix[-1,-band_len:])
     best_path = []
   
     traced_short_index = short_len
     #traced_long_index = np.argmin(cum_matrix[-1:])
-    traced_long_index = np.random.choice(\
-                np.where(cum_matrix[-1,:]==min(cum_matrix[-1,:]))[0])
+    traced_long_index = long_len + 1 - band_len + np.random.choice(\
+                np.where(cum_matrix[-1,-band_len:]==best_score)[0])
 
     while traced_short_index > 0:
 
@@ -392,9 +449,7 @@ def dtw_local_alignment_max_sum_band_flipped(long, short, band_prop = 0.4, \
             traced_long_index -= 1
     # best_path: 0-based coordinate on the (i+1)*(j+1) matrix
     best_path = np.array(best_path)
-    return best_path[::-1], best_score/len(best_path[::-1]),cum_matrix
-
-
+    return best_path[::-1], best_score ,cum_matrix
 
 
 ##############################################################################
