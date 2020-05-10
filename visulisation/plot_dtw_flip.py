@@ -8,7 +8,7 @@ import scrappy
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/..")
 import helper
-
+import junction_squiggle_selection
 from dtw import dtw_local_alignment_max_sum_band_flipped as dtw_local_alignment
 from dtw import dist_to_likelihood_flipped
 
@@ -22,6 +22,8 @@ def parse_arg():
         print("\n\nUsage: python {} [OPTIONS] <fast5 filename>".format(argv[0]))
         print("Options:\n\tIndexing:")
         print('\t\t-q STR\tqueried candidate sequence (required)')
+        print('\t\t-l STR\talignment for the read in SAM format (required)')
+        
         print('\t\t-s INT\tstart base of the signal')
         print('\t\t-e INT\tend base of the signal')
         print("\t\t-o INT\toutput figure name, default 'Untitled'\n"
@@ -34,100 +36,147 @@ def parse_arg():
         print('\t\t-T \tNumber of events trimmed from scrappie model')
         print("\tNote, either '-p','-w' or '-s', '-e' are required!")
         return None
-    try:
-        argv = sys.argv
-        if len(argv) < 3:
+
+    argv = sys.argv
+    if len(argv) < 3:
+        print_help()
+        sys.exit()
+    
+    opts, args = getopt.getopt(argv[1:],"hs:e:o:q:p:w:vT:m:l:",
+                    ["help","start=","end=","output_figure="
+                    ,"sequence=", "position=", "window=","verbose","trim=","scrappie_model=","SAM="])
+
+    # default setting
+    start_pos, end_pos,sequence,t_position\
+        = None, None, None, None
+    verbose = False
+    window = 20
+    trim_model = 2
+    trim_signal = TRIM_SIGNAL
+    figure_name = "Untiled"
+    scrappie_model = 'squiggle_r94'
+    
+    for opt, arg in opts:
+        if opt in ('-h', "--help"):
             print_help()
             sys.exit()
-        
-        opts, args = getopt.getopt(argv[1:],"hs:e:o:q:p:w:vT:m:",
-                        ["help","start=","end=","output_figure="
-                        ,"sequence=", "position=", "window=","verbose","trim=","scrappie_model="])
+        elif opt in ("-s", "--start"):
+            start_pos = int(arg)
+        elif opt in ("-l", "--SAM"):
+            sam_line = arg
+        elif opt in ("-e", "--end"):
+            end_pos= int(arg)
+        elif opt in ("-o", "--output_figure"):
+            figure_name = arg
+        elif opt in ("-q", "--sequence"):
+            sequences = arg
+        elif opt in ("-p", "--position"):
+            t_position = int(arg)
+        elif opt in ("-w", "--window"):
+            window = int(arg)
+        elif opt in ("-v", "--verbose"):
+            verbose = True
+        elif opt in ("-T", "--trim"):
+            trim_model = int(arg)
+        elif opt in ("-m", "--scrappie_model"):
+            scrappie_model = arg
 
-        # default setting
-        start_pos, end_pos,sequence,t_position\
-            = None, None, None, None
-        verbose = False
-        window = 20
-        trim_model = 2
-        figure_name = "Untiled"
-        scrappie_model = 'squiggle_r94'
-        
-        for opt, arg in opts:
-            if opt in ('-h', "--help"):
-                print_help()
-                sys.exit()
-            elif opt in ("-s", "--start"):
-                start_pos = int(arg)
-            elif opt in ("-e", "--end"):
-                end_pos= int(arg)
-            elif opt in ("-o", "--output_figure"):
-                figure_name = arg
-            elif opt in ("-q", "--sequence"):
-                sequences = arg
-            elif opt in ("-p", "--position"):
-                t_position = int(arg)
-            elif opt in ("-w", "--window"):
-                window = int(arg)
-            elif opt in ("-v", "--verbose"):
-                verbose = True
-            elif opt in ("-T", "--trim"):
-                trim_model = int(arg)
-            elif opt in ("-m", "--scrappie_model"):
-                scrappie_model = arg
+    fast5_filename = args[0]
 
-        fast5_filename = args[0]
+    return start_pos, end_pos,sequence,t_position, verbose, trim_model, fast5_filename, window, figure_name, scrappie_model,sequences, sam_line,trim_signal
 
-        return start_pos, end_pos,sequence,t_position, verbose, trim_model, fast5_filename, window, figure_name, scrappie_model,sequences
-
-    except:
-        print("Error,failed to parse command line arguments!")
-        print_help()
-        sys.exit(1)
 
 
 def main():
 
-
     # parse command line args:
     start_pos, end_pos,sequence,t_position, verbose, trim_model,\
     fast5_filename, window, figure_name,\
-        scrappie_model,sequences = parse_arg()
+        scrappie_model,sequences, sam_line, trim_signal = parse_arg()
     
+
+    # get alignment info
+    sam_flag, mapped_pos0, cigar = [sam_line.strip().split('\t')[index] for index in [1,3,5]]
+    mapped_pos0 = int(mapped_pos0)
+    # 1-based to 0-based
+    mapped_pos0 -= 1
+    # determine strand
+    if sam_flag == "0":
+        strand = "+"
+    elif sam_flag == "16":
+        strand = "-"
+    else:
+        print("Error: Abnormal mapped reads.")
+        sys.exit(0)
+
+    # Get candidate motifs
+    sequences = sequences.strip().split(",")
+    if strand == "-":
+        sequences = [helper.reverse_complement(s) for s in sequences]
+
+
+    # tombo resquiggle
+    try:
+        tombo_results, tombo_start_clip, tombo_end_clip = \
+            junction_squiggle_selection.tombo_squiggle_to_basecalls(fast5_filename)
+    except:
+        print("tombo resquiggle failed!!")
+        sys.exit(0)
+    read_length = len(tombo_results.genome_seq) + tombo_start_clip + tombo_end_clip
+    normalised_raw_signal = tombo_results.raw_signal/1.4826
+    
+    # genome pos to read pos mapping vector
+    g_r_mapping = junction_squiggle_selection.genome_to_read_pos_conversion(cigar)
 
     # get signal
-    if start_pos and end_pos:
-        signal = helper.get_junction_signal_by_pos(fast5_filename, \
-         start_pos = start_pos + TRIM_SIGNAL, end_pos = end_pos - TRIM_SIGNAL)
+    start_pos += trim_signal
+    end_pos -= trim_signal
+    start_pos_rel_to_mapped_start = start_pos - mapped_pos0
+    end_pos_rel_to_mapped_start = end_pos- mapped_pos0
 
+    if  start_pos_rel_to_mapped_start >= 0 and start_pos_rel_to_mapped_start < len(g_r_mapping):
+        candidate_start = g_r_mapping[start_pos_rel_to_mapped_start]
+        
+        # discard junction squiggle with the queried motif start/end mapped to gaps
+        if candidate_start == -1:
+            print("Warning: Abnormal mapping, junction squiggle skipped.")
 
-    elif t_position:
-        signal = helper.get_junction_signal_by_pos(fast5_filename, 
-                            junction_pos = t_position, window = window)
+        elif g_r_mapping[start_pos_rel_to_mapped_start] == \
+            g_r_mapping[start_pos_rel_to_mapped_start - 1]:
+            candidate_start += 1 
     else:
-        print("Invalid command line input:"
-        "\t\tEither '-p','-w' or '-s', '-e' are required!")
-        sys.exit(0)
+        print("candidate start pos out of bound.")
 
-    if not sequences:
-        print("-q is required!!!")
-        sys.exit(0)
+
+    if end_pos_rel_to_mapped_start < len(g_r_mapping):
+        candidate_end = g_r_mapping[end_pos_rel_to_mapped_start - 1] + 1
+        
+        # discard junction squiggle with the queried motif start/end mapped to gaps
+        if candidate_end == -1 + 1:
+            print("Warning: Abnormal mapping, junction squiggle skipped.")
+
     else:
-        sequences = sequences.strip().split(',')
+        print("candidate end pos out of bound.")
+
+
+
+    # get signal
+    if strand == "+":
+        seg_start = max(candidate_start - tombo_start_clip, 0)
+        seg_end = candidate_end - tombo_start_clip
+        
+    elif strand == "-":
+        seg_start = max(read_length - candidate_end -1 - tombo_start_clip, 0)
+        seg_end = read_length - candidate_start - 1 - tombo_start_clip
     
-    if verbose:
-        print("Candidate sequence:")
-        print(sequences)
+    # take into account the end clip
+    seg_end = min(seg_end, len(tombo_results.segs) - 1)
 
-    # Get strand(in fast5)
-    try:
-        strand = helper.Fast5Class(fast5_filename).get_alignment(
-            "mapping_info")["mapped_strand"]
-        if strand == "-":
-            sequences = [helper.reverse_complement(s) for s in sequences]
-    except:
-        sys.exit(0)
+    signal = normalised_raw_signal[tombo_results.segs[seg_start]:tombo_results.segs[seg_end]]
+    #spike removal
+    signal = signal[abs(signal) < 3]
 
+    # running DTW
     model_dic = helper.expect_squiggle_dict(sequences,model = scrappie_model,trim = trim_model)
     dtw_long = np.array(signal, float)
     
@@ -135,13 +184,7 @@ def main():
     for key in model_dic.keys():
         candidate_ID += 1
         dtw_short = np.array(model_dic[key],float)
-        
-        #normalise the simulated squiggle
-        #dtw_short[:,0] = helper.normalization(dtw_short[:,0], "median_shift")
-        #dtw_short[:,1] = dtw_short[:,1]/sqrt(np.std(dtw_short[:,0]))
 
-        #print("dtw_short")
-        dtw_short = np.array(dtw_short)
         if verbose:
             print("Input queried signal: " + '\t'.join([str(i) for i in dtw_long]))
             print("\n\n\nInput model: " + '\t'.join([str(i) for i in dtw_short]))
@@ -164,9 +207,9 @@ def main():
         matplotlib.rc('xtick', labelsize=20)     
         matplotlib.rc('ytick', labelsize=20)
         fig, axes = plt.subplots(nrows=3, figsize=(30,20))
+
+
 ###################################################################
-
-
         axes[0].plot(dtw_long,linewidth = 10)
         #axes[0].plot(dtw_short[:,0],color = "orange",linewidth = 6)
         #axes[0].plot(dtw_short[:,0] + dtw_short[:,1],':',color = "orange",linewidth = 4)
@@ -188,7 +231,8 @@ def main():
         axes[0].plot(np.array(path)[:,0]-1, dtw_short[[np.array(path)[:,1]-1]][:,0]\
                                         - dtw_short[[np.array(path)[:,1]-1]][:,1],':',color = "orange",linewidth = 4)
 
-        axes[0].set_title(figure_name+"_"+key+"({})\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(str(candidate_ID == 1),score*len(np.array(path)),len(np.array(path)),score),fontsize=40, pad = 30)
+        #axes[0].set_title(figure_name+"_"+key+"({})\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(str(candidate_ID == 1),score*len(np.array(path)),len(np.array(path)),score),fontsize=40, pad = 30)
+        axes[0].set_title(figure_name+"_"+key+"({})\nDist: {:.2f}, path length: {}, Adjusted dist: {:.2f}".format(str(candidate_ID == 1),score,len(np.array(path)),score/len(np.array(path))),fontsize=40, pad = 30)
         print("candidate " + key + "finished!")
         
 
@@ -206,7 +250,7 @@ def main():
             #plt.savefig(figure_name+"_"+str(candidate_ID)+"simulated_squiggle.png")
 
         # plot path heatmap
-        if False:
+        if True:
             #axes[2].figure(figsize=(10,5))
             #fig.figsize=(10,5)
             pos = axes[2].imshow(matrix, cmap='hot', interpolation='nearest',aspect='auto')
@@ -216,7 +260,7 @@ def main():
 
         
         # plot squiggle
-        if True:
+        if False:
             axes[2].plot(dtw_long,linewidth = 4)
         
         
