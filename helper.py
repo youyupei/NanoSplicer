@@ -237,7 +237,7 @@ def expect_squiggle_dict(seqs, trim = 0, model = 'squiggle_r94'):
 		for seq in seqs:
 			squiggle = sequence_to_squiggle(seq = seq, trim = trim, model = model)
 			for mean, std, dwell_time in squiggle:
-				expect_squiggle_dic[seq] += [[mean, std]]
+				expect_squiggle_dic[seq] += [[mean, std]] * 4
 	else:
 		print("No valid input detected when generating expect squiggle")
 		sys.exit(0)
