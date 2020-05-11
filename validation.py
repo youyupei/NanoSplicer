@@ -230,6 +230,7 @@ def main():
 
         model_dic = expect_squiggle_dict(candidate.sequences, trim = trim_model)
         
+        signal = signal[abs(signal) < 3]
         dtw_long = np.array(signal, float)
 
         for key in candidate.sequences:
