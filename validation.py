@@ -62,7 +62,7 @@ def parse_arg():
     for opt, arg in opts:
         if opt in ('-h', "--help"):
             print_help()
-            sys.exit(0)
+            sys.exit(999)
         elif opt in ("-o", "--output_csv"):
             output_file = arg
         elif opt in ("-c", "--candidate_file"):
@@ -164,7 +164,7 @@ def main():
             
             # discard junction squiggle with the queried motif start/end mapped to gaps
             if candidate.start == -1:
-                print("Warning: Abnormal mapping, junction squiggle skipped.")
+                print("Warning: Junction squiggle start index point to mapped intron, junction squiggle skipped.")
                 outf.write("\n")
                 continue
 

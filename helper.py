@@ -56,8 +56,6 @@ def read_raw_signal(fast5, start = None, end = None):
 #		sys.exit(0)
 #
 
-
-
 	
 def reverse_complement(seq):
 	'''
@@ -263,6 +261,7 @@ def parse_candidate_file(filename):
 			try:
 				candidate_list.append(candidate(line[:-3], line[-3], line[-2]))
 			except:
+				print("parse_candidate_file failed")
 				sys.exit(0)
 	return candidate_list
 
