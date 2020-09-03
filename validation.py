@@ -5,6 +5,7 @@ import timeit
 import os
 import numpy as np
 import re
+import fcntl
 
 
 from math import sqrt
@@ -62,7 +63,7 @@ def parse_arg():
     for opt, arg in opts:
         if opt in ('-h', "--help"):
             print_help()
-            sys.exit(999)
+            sys.exit(0)
         elif opt in ("-o", "--output_csv"):
             output_file = arg
         elif opt in ("-c", "--candidate_file"):
@@ -91,6 +92,30 @@ def parse_arg():
      dtw_local_alignment, trim_model, trim_signal, sam_line
 
 def main():
+
+    os.system("mkdir -p .tmp")
+    fcount_pass = ".tmp/pass"
+    ftombo_fail = ".tmp/tombo_fail"
+    fabnormal_sam_flag = ".tmp/abnormal_sam_flag"
+    fbad_junction_mapping = ".tmp/bad_junction_mapping"
+
+    os.system("touch {} {} {} {}".format(
+        fcount_pass,
+        ftombo_fail,
+        fabnormal_sam_flag,
+        fbad_junction_mapping
+        ))
+    
+    def count_in_tmp(filename):
+        f = open(filename, "r+")
+        fcntl.flock(f,fcntl.LOCK_EX)
+        count = f.read()
+        count = int(count) + 1 if count else 1
+        f.seek(0)
+        f.write(str(count))
+        f.truncate()
+        f.close()
+
     fast5_filename, output_file, candidate_file, \
         dtw_local_alignment, trim_model, trim_signal, sam_line = parse_arg()
     
@@ -124,6 +149,7 @@ def main():
         strand = "-"
     else:
         print("Error: Abnormal mapped reads.")
+        count_in_tmp(fabnormal_sam_flag)
         sys.exit(0)
 
 
@@ -133,6 +159,7 @@ def main():
             junction_squiggle_selection.tombo_squiggle_to_basecalls(fast5_filename)
     except:
         print("tombo resquiggle failed!!")
+        count_in_tmp(ftombo_fail)
         sys.exit(0)
     
     read_length = len(tombo_results.genome_seq) + tombo_start_clip + tombo_end_clip
@@ -165,6 +192,7 @@ def main():
             # discard junction squiggle with the queried motif start/end mapped to gaps
             if candidate.start == -1:
                 print("Warning: Junction squiggle start index point to mapped intron, junction squiggle skipped.")
+                count_in_tmp(fbad_junction_mapping)
                 outf.write("\n")
                 continue
 
@@ -182,7 +210,8 @@ def main():
             
             # discard junction squiggle with the queried motif start/end mapped to gaps
             if candidate.end == -1 + 1:
-                print("Warning: Abnormal mapping, junction squiggle skipped.")
+                print("Warning: Junction squiggle end index point to mapped intron, junction squiggle skipped.")
+                count_in_tmp(fbad_junction_mapping)
                 outf.write("\n")
                 continue
         else:
@@ -215,6 +244,7 @@ def main():
         
         else:
             print("pass")
+            count_in_tmp(fcount_pass)
 
 
 ########################################delete later######################################
