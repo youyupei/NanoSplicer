@@ -144,19 +144,17 @@ def canonical_site_finder(candidate_Interval, ref_FastaFile,
 
 
 
-def candidate_motif_generator(chrID, intron_start_candidate, 
-                              intron_end_candidate, 
+def candidate_motif_generator(chrID, candidates_tuple, 
                               flank_size, ref_FastaFile):
     '''
         generate candidate motif (genome forward strand) with flanking seq
     '''
-    if not intron_start_candidate or not intron_end_candidate:
-        return None, None, None, None
-    motif_start_pos = min(intron_start_candidate) - flank_size
-    motif_end_pos = max(intron_end_candidate) + flank_size
 
-    candidates_tuple = list(itertools.product(intron_start_candidate, 
-                                              intron_end_candidate))
+    if not candidates_tuple:
+        return None, None, None, None
+    
+    motif_start_pos = min([x[0] for x in candidates_tuple]) - flank_size
+    motif_end_pos = max([x[1] for x in candidates_tuple]) + flank_size
 
     motif_list = []
     for donor, acceptor in candidates_tuple:

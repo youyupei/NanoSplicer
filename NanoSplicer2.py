@@ -152,16 +152,24 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
     fbad_junction_mapping = "{}/.tmp/bad_junction_mapping.tmp".format(output_path)
     fno_signal_found = "{}/.tmp/detect_signal_fail".format(output_path)
     #fpass_squiggle = "{}/.tmp/count_pass.tmp".format(output_path)
+   
     # loop thought each junction
     for junc_id, junction in enumerate(all_junctions):
         overlap_read = AlignmentFile.fetch(chrID, junction.begin, junction.end)
         
+        # find GT-AG pattern in a window nearby
         donor_lst, acceptor_lst = canonical_site_finder(junction, 
                                           ref_FastaFile, AlignmentFile, 
                                           window, chrID)
+        candidates_tuple = list(itertools.product(donor_lst, acceptor_lst))
         
+        #  add best supported junction if it is not GT-AG
+        if (junction.begin, junction.end) not in candidates_tuple:
+            candidates_tuple.append((junction.begin, junction.end))
+
+        # get candidate motifs
         candidates_pos, candidate_motif, motif_start, motif_end = \
-                candidate_motif_generator(chrID, donor_lst, acceptor_lst, 
+                candidate_motif_generator(chrID, candidates_tuple, 
                                           flank_size, ref_FastaFile)
 
         if not candidate_motif:# or len(candidate_motif) == 1:
