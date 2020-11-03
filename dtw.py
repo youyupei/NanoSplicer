@@ -30,6 +30,7 @@ class dtw(object):
         self.dist_type = dist_type
 
     def __cost(self, x, *y, dist_type=None):
+        from scipy.stats import norm
         '''
         Define the cost function in DTW
         input:
@@ -49,10 +50,13 @@ class dtw(object):
             retrun:
                 log density in standard normal distribution
             '''
+            #return -np.log(norm.pdf(a, b_mean, b_std))
             #diff = min(abs(a - b_mean))
             diff = abs(a - b_mean)
             z = diff/b_std
             laplacc_b = b_std/np.sqrt(2)
+            #
+            
             #return 0.9189385 + z**2/2 #norm
             #return 1.14473 + log(1+z**2) # t with df = 1
             return np.log(2*laplacc_b) + diff/laplacc_b

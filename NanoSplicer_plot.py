@@ -63,7 +63,7 @@ def parse_arg():
         print('\t\t-t \tNumber of samples trimmed from raw signal')
         print('\t\t-F \tFlanking sequence size in each side')
         print('\t\t-w \twindow size for searching the candidate')
-     
+        print('\t\t-G \trun junctions in csv file')
         return None
 
     argv = sys.argv
@@ -72,11 +72,11 @@ def parse_arg():
         sys.exit(0)
     
     try: 
-        opts, args = getopt.getopt(argv[1:],"hi:f:r:o:T:t:ab:F:w:",
+        opts, args = getopt.getopt(argv[1:],"hi:f:r:o:T:t:ab:F:w:G:",
                     ["help=","input_alignment=","input_fast5_dir=",
                     "genome_ref=","output_path=", "trim_model=",
                     "trim_signal=","dtw_adj","bandwidth=",
-                    "flank_size=", "window="])
+                    "flank_size=", "window=","group="])
     
     except getopt.GetoptError:
         print_help()
@@ -117,6 +117,8 @@ def parse_arg():
            flank_size = int(arg)
         elif opt in ("-w", "--window"):
            flank_size = int(arg)
+        elif opt in ("-G", "--group"):
+            group_filename = arg
 
 
     # check input
@@ -134,8 +136,8 @@ def parse_arg():
                    dist_type = dist_type).dtw_local_alignment()
     
     return fast5_dir, output_path, alignment_file, genome_ref, \
-            bandwidth, trim_model, trim_signal, flank_size, window
-
+            bandwidth, trim_model, trim_signal, flank_size, \
+            window, group_filename
 def count_in_tmp(filename):
     '''
         count once in a certain tmp file
@@ -159,27 +161,29 @@ def read_file_for_ploting(filename):
     ids = []
     minimap_site = []
     NanoSplicer_site = []
+    true_site = []
     minimap_priors = []
     NanoSplicer_priors = []
     with open(filename, 'r') as f:
         for line in f:
-            rid, mst, mnd, nst, nnd = line.strip().split(',')
+            rid, mst, mnd, nst, nnd, tst, tnd = line.strip().split(',')
             mp ,np = 2,2
-            mst, mnd, nst, nnd, mp ,np \
-                = int(mst), int(mnd), int(nst), int(nnd), int(mp), int(np)
+            mst, mnd, nst, nnd, mp ,np, tst, tnd \
+                = int(mst), int(mnd), int(nst), int(nnd), int(mp), int(np), \
+                    int(tst), int(tnd)
             ids.append(rid)
             minimap_site.append(Interval(mst, mnd))
             NanoSplicer_site.append(Interval(nst, nnd))
+            true_site.append(Interval(tst, tnd))
             minimap_priors.append(mp)
             NanoSplicer_priors.append(np)
-    return ids, minimap_site, NanoSplicer_site, \
+    return ids, minimap_site, NanoSplicer_site, true_site, \
                 minimap_priors, NanoSplicer_priors
 
 def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile, 
                     window, chrID, flank_size, trim_model, trim_signal,
-                    bandwidth, output_file):
-    read_id_file_name =\
-        '/data/cephfs/punim0614/yupei/bulk_nanopore_Ritchie/analysis/test/all_cand/read_id'
+                    bandwidth, output_file, group_filename):
+                    
     def dtw_local_alignment(candidate_squiggle, junction_squiggle, 
                             bandwidth = bandwidth, dist_type = None):
         
@@ -193,8 +197,9 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
     reads_in_file = set(multi_fast5.get_read_ids())
 
     print("reading junction list file...")
-    ids, minimap_site, NanoSplicer_site, minimap_priors, NanoSplicer_priors \
-         = read_file_for_ploting(read_id_file_name)
+    ids, minimap_site, NanoSplicer_site, true_site, \
+        minimap_priors, NanoSplicer_priors \
+            = read_file_for_ploting(group_filename)
     print("reading junction list file done")
     
     for i in range(len(minimap_site)):
@@ -235,16 +240,17 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                 candidate_motif_generator(chrID, donor_lst, acceptor_lst, 
                                             flank_size, ref_FastaFile)
 
+        print(minimap_site[i])
         index_m = candidates_pos.index((minimap_site[i].begin, minimap_site[i].end))
         index_n = candidates_pos.index((NanoSplicer_site[i].begin, NanoSplicer_site[i].end))
+        index_t = candidates_pos.index((true_site[i].begin, true_site[i].end))
         
         print(index_m, index_n)
-        if False:
+        if True:
             '''
             two candidates mode
             '''
-            candidate_motif = [candidate_motif[index_m], candidate_motif[index_n]]
-        
+            candidate_motif = [candidate_motif[index_t], candidate_motif[index_n]]
         if not candidate_motif:# or len(candidate_motif) == 1:
             continue
 
@@ -332,25 +338,41 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
 
 
         cum_path = {}
+        score_dict = {}
         squiggle_match = {}
-        output_prefix = 'laplace_v1'
+        output_prefix = ''
         num_of_cand = len(candidates_for_read)
+        SAVE_DATA = False
+        aligned_base = {}
 
 
         # edited
-        for j, candidate in enumerate(candidates_for_read[::-1]):
+        for j, candidate in enumerate(candidates_for_read):
             print(candidate)
             candidate_squiggle = np.array(model_dic[candidate],float)
             #dtw run
             path , score, cum_matrix = \
                 dtw_local_alignment(candidate_squiggle=candidate_squiggle, 
                                     junction_squiggle = junction_squiggle)
-            print(score)
+            
+
+
+            score_dict[j] = -1 * score
             
             # candidate squiggle in matched len of junction suqiggle
             squiggle_match[j] = candidate_squiggle[path[:,1] - 1, :]
+            aligned_base[j] = candidate[trim_model + int((path[0,1] - 1)/4): trim_model+ int((path[-1,1] - 1)/4) + 1]
             cum_path[j] = cum_matrix[path[:, 0], path[:, 1]]
             
+            def find_candidate_middle_pos(squiggle_match):
+                out = [0]
+                for i in range(1, len(squiggle_match)):
+                    if (squiggle_match[i] == squiggle_match[i-1]).all():
+                        out[-1] += 0.5
+                    else:
+                        out.append(i)
+                return(out)
+
             # renormalisation (theilslopesrenor)
             if False:
                 def likelihood_contribute(junction_squiggle,squiggle_match):    
@@ -396,28 +418,65 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                     # candidate squiggle in matched len of junction suqiggle
                     squiggle_match[j] = candidate_squiggle[path[:,1] - 1, :]
                     cum_path[j] = cum_matrix[path[:, 0], path[:, 1]]
+            
             # LR plot
-            if j == num_of_cand - 1:             
-                fig, ax1 = plt.subplots()
+            if j == num_of_cand - 1:
+                distinguish_points_idx = \
+                    np.where(np.abs(squiggle_match[0][:,0] - squiggle_match[1][:,0]) > \
+                     squiggle_match[1][:,1])[0]
+                LR_cum = cum_path[1] - cum_path[0]
+                LR_con = np.append(LR_cum[0], LR_cum[1:] - LR_cum[:-1])
+                fig, axes = plt.subplots(nrows=2, figsize=(20,12))
+                axes[0].plot(distinguish_points_idx,
+                                np.repeat(max(junction_squiggle)+0.5,len(distinguish_points_idx)), 'o')
+                axes[0].plot(squiggle_match[0][:,0], 'r',linewidth=0.4, 
+                        label = "minimap2 candidate")
+                axes[0].plot(squiggle_match[1][:,0], 'g',linewidth=0.4,
+                        label = "NanoSplcier candidate")
+                axes[0].plot(junction_squiggle, 'b',linewidth=0.4, 
+                        label = "junction squiggle")
+                axes[0].legend(frameon=False, loc='best')
+                axes[0].set_title(
+                    "LR_full = {}, # of distinguish points = {}, LR_middle = {}, adj_dist_full = {},{}, adj_dist_middle = {},{}\n {}\n{}".format(
+                    score_dict[0] - score_dict[1], len(distinguish_points_idx),
+                    np.sum(LR_con[distinguish_points_idx]),
+                    -score_dict[0]/len(path),-score_dict[1]/len(path),
+                    np.mean(np.append(cum_path[0][0], cum_path[0][1:] - cum_path[0][:-1])[distinguish_points_idx]),
+                    np.mean(np.append(cum_path[1][0], cum_path[1][1:] - cum_path[1][:-1])[distinguish_points_idx]),
+                    aligned_base[0], aligned_base[1]
+                ))
+                middle_pos = find_candidate_middle_pos(squiggle_match[0])
+                for i in range(len(aligned_base[0])):
+                    axes[0].annotate(aligned_base[0][i],
+                        xy=(middle_pos[i], max(junction_squiggle) + 0.2), xycoords='data', ha='center')
+                middle_pos = find_candidate_middle_pos(squiggle_match[1])
+                for i in range(len(aligned_base[1])):
+                    axes[0].annotate(aligned_base[1][i],
+                        xy=(middle_pos[i], min(junction_squiggle) - 0.2), xycoords='data', ha='center')
+                                
+                ax1 = axes[1]
                 ax2 = ax1.twinx()
                 # for j_i in range(num_of_cand):
                 #     ax1.plot(squiggle_match[j_i][:,0], 'r',linewidth=0.2)
                 # plt.savefig("{}_cum_LR_{}.png".format(output_prefix, read.qname))
                 # plt.close()
 
-                ax1.plot(squiggle_match[0][:,0], 'r',linewidth=0.2)
-                ax1.plot(squiggle_match[1][:,0], 'g',linewidth=0.2) 
+                ax1.plot(squiggle_match[0][:,0], 'r',linewidth=0.4, 
+                        label = "minimap2 candidate")
+                ax1.plot(squiggle_match[1][:,0], 'g',linewidth=0.4, 
+                        label = "NanoSplicer candidate")
 
-                
                 # # plot contribution of each data point in LR
                 if True:
                     LR_cum = cum_path[1] - cum_path[0]
                     ax2.plot(np.append(LR_cum[0], LR_cum[1:] - LR_cum[:-1]), 
-                            color='#4b0082', linewidth=0.2, alpha=1, dash_capstyle='round')
+                            color='#4b0082', linewidth=0.4, alpha=1, 
+                            dash_capstyle='round', label = 'LR contribution')
                     ax1.set_xlabel('Index')
                     ax1.set_ylabel('Candidate squiggle', color='g')
                     ax2.set_ylabel('log likelihood ratio contribution', color='#4b0082')
-                    plt.savefig("LR_{}.png".format(read.qname))
+                    ax1.legend(frameon=False, loc='best')
+                    fig.savefig("{}.png".format(read.qname))
                     plt.close()
                 
                 #plot cumulative contribution of LR of each data point
@@ -435,10 +494,11 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                     # candidate_squiggle[:,1] = candidate_squiggle[:,1] / mad_c
                 
         # Plot DTW 
-            if True:
+            if False:
                 print(score)
-                np.savetxt("{}_candidate{}_{}.csv".format(output_prefix, read.qname,j), squiggle_match[j], delimiter=",")
-                np.savetxt("junction_squiggle{}.csv".format(read.qname), junction_squiggle, delimiter=",")
+                if SAVE_DATA:
+                    np.savetxt("{}_candidate{}_{}.csv".format(output_prefix, read.qname,j), squiggle_match[j], delimiter=",")
+                    np.savetxt("junction_squiggle{}.csv".format(read.qname), junction_squiggle, delimiter=",")
                 fig, axes = plt.subplots(nrows=4, figsize=(30,40))
                 axes[0].plot(junction_squiggle,linewidth = 10)
                 axes[0].tick_params(labelsize=40)
@@ -446,7 +506,7 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                 axes[1].plot(candidate_squiggle[:,0], color = "orange",linewidth =7)
                 axes[1].plot(candidate_squiggle[:,0] + candidate_squiggle[:,1], ":",color = "orange",linewidth = 4)
                 axes[1].plot(candidate_squiggle[:,0] - candidate_squiggle[:,1], ":",color = "orange",linewidth = 4)
-                axes[1].tick_params(labelsize=40)
+                axes[1].tick_params(labelsize=40)   
                 axes[1].set_title("Scrappie model",fontsize=30, pad = 1)
                 axes[2].plot(junction_squiggle,linewidth = 10)
                 axes[2].tick_params(labelsize=40)
@@ -464,7 +524,7 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                 #             score/len(path), 
                 #             [minimap_priors[i], NanoSplicer_priors[i]][j])
                 #         ,fontsize=40, pad = 1)
-                
+
                 pos = axes[3].imshow(cum_matrix, cmap='hot', interpolation='nearest',aspect='auto')
                 fig.colorbar(pos,ax = axes[3])
                 axes[3].plot(path[:,1], path[:,0])
@@ -579,7 +639,7 @@ def main():
     # get command line input
     fast5_dir, output_path, alignment_file, genome_ref, \
         bandwidth, trim_model, trim_signal, \
-        flank_size, window =  parse_arg()
+        flank_size, window, group_filename = parse_arg()
     os.system("mkdir -p {}".format(output_path))
 
     # create tmp files
@@ -634,7 +694,8 @@ def main():
                       trim_model,
                       trim_signal,
                       bandwidth,
-                      out_fn)
+                      out_fn, 
+                      group_filename)
 
 if __name__ == "__main__":
     main()
