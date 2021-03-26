@@ -3,6 +3,7 @@ import intervaltree
 from intervaltree import IntervalTree
 import re
 import itertools
+import numpy as np
 
 # read .bam file
 def get_intron_tree(pysamAlignment, chrID):
@@ -42,7 +43,7 @@ def get_intron_tree(pysamAlignment, chrID):
             break
 
 # get alignment given genome pos
-def find_candidate(begin, end, tree, window=10, min_primary = 0, 
+def find_candidate(Interval_list, window=10, min_primary = 0, 
                    min_support=0, secondary_thres=0.0, primary_thres=1.0):
     '''
     Find candidate exon boundary (i.e. intron boundary) within a given range.
@@ -66,8 +67,10 @@ def find_candidate(begin, end, tree, window=10, min_primary = 0,
             secondary_thres * support num of the most supported boundary.
     '''
     # get boundaries with in searching window, sorted by the number of support
-    
-    intervals_tree = IntervalTree(tree.envelop(begin, end))
+    intervals_tree = IntervalTree()
+    for interval in Interval_list:
+        intervals_tree.addi(interval.begin, interval.end, interval.data)    
+        
     candidate_boundaries = []
     while intervals_tree:
         interval = max(intervals_tree, key = lambda x: x.data)
@@ -86,11 +89,11 @@ def find_candidate(begin, end, tree, window=10, min_primary = 0,
             if i.begin <= interval.begin + window and \
                     i.end >= interval.end - window:
                 if i.data > secondary_thres * best_support:        
-                    neighbour_found.append(i)
+                    neighbour_found.append((interval, i))
                 intervals_tree.remove(i)
         if neighbour_found:
-            neighbour_found.append(interval)
-            count = sum([x.data for x in neighbour_found])
+            neighbour_found.append((interval, interval))
+            count = sum([x.data for y, x in neighbour_found])
             if count >= min_support and best_support/count <= primary_thres:
                 candidate_boundaries += neighbour_found
     return candidate_boundaries
@@ -165,68 +168,50 @@ def candidate_motif_generator(chrID, candidates_tuple,
 
     return candidates_tuple, motif_list, motif_start_pos, motif_end_pos
 
+def find_junctions(intron_tree, window = 10):
+	def split_by_begin(list_of_intervals, window = window):
+		'''
+		Input:
+			1-D list of interval
+		return:
+			2-D list: splited input list by window.
+		'''
+		list_of_intervals = sorted(list_of_intervals, key = lambda x: x.begin)
+		adj_diff = [list_of_intervals[i].begin - list_of_intervals[i-1].begin for i in range(1, len(list_of_intervals))]
+		split_index = np.where(np.array(adj_diff) > window)[0] + 1
+		split_by_begin = []
+		pre_index = 0
+		for index in np.where(np.array(adj_diff) > 10)[0] + 1:
+			split_by_begin.append(list_of_intervals[pre_index:index])
+			pre_index = index
+		return split_by_begin
+	def split_by_end(list_of_intervals, window = window):
+		'''
+		Input:
+			1-D list of interval
+		return:
+			2-D list: splited input list by window.
+		'''
+		list_of_intervals = sorted(list_of_intervals, key = lambda x: x.end)
+		adj_diff = [list_of_intervals[i].end - list_of_intervals[i-1].end for i in range(1, len(list_of_intervals))]
+		split_index = np.where(np.array(adj_diff) > window)[0] + 1
+		split_by_end = []
+		pre_index = 0
+		for index in np.where(np.array(adj_diff) > 10)[0] + 1:
+			split_by_end.append(list_of_intervals[pre_index:index])
+			pre_index = index
+		return split_by_end
+	output_list = []
+	split_by_begin = split_by_begin(intron_tree)
+	for l in split_by_begin:
+		output_list += split_by_end(l)
+	return output_list
+
+
+
 
 def main():
     return None
-
-## test part
-#import pysam
-#
-#BAM_FN = 'BAM/Chr_ID/NC_000001.11.bam'
-#REF_FN = '/data/cephfs/punim0614/shared/shared_data/external_public/' \
-#            'RNASeqMixology/splice_site_analysis/GRCh38_latest_genomic.fna'
-#REF_FN_IDX = '/data/cephfs/punim0614/shared/shared_data/external_public/' \
-#            'RNASeqMixology/splice_site_analysis/GRCh38_latest_genomic.fna.fai'
-#
-#fbam = pysam.AlignmentFile(BAM_FN)
-#fref = pysam.FastaFile(REF_FN)
-#
-#chrID = 'NC_000001.11'
-#test = fref.fetch(chrID, 100000,100500)
-#
-#fbam.check_index()
-#fbam.count()
-#f_fetch = fbam.fetch() # reads iterator
-#f_introns = fbam.find_introns(f_fetch) # dictionary
-#
-#intron_tree = IntervalTree()
-#for (begin, end), data in f_introns.items():
-#    intron_tree.addi(begin, end, data)
-#
-## test transcript direction
-#
-#
-#
-##built non overlapped range
-#intron_tree_non_overlaps = intron_tree.copy()
-#intron_tree_non_overlaps.merge_overlaps()
-#
-#count = 0
-#single_support = 0
-#total_candidate = 0
-#total_junc_within_read = 0
-#for interval in intron_tree_non_overlaps:
-#    candidates = find_candidate(interval.begin, interval.end, intron_tree, 10)
-#    if candidates:
-#        print(candidates)
-#    # statistics
-#    total_candidate += len(candidates)
-#    total_junc_within_read += sum([x.data for x in candidates])
-#    single_support += len([x.data for x in candidates if x.data < 30])
-#    count += 1 
-#    if count < 0:
-#        break
-#
-#
-#f_fetch = fbam.fetch('NC_000001.11',start = 29200000, stop = 30000000)
-#f_pileup = fbam.pileup('NC_000001.11',start = 14000, stop = 15000, truncate=True)
-#f_pileup = fbam.pileup(contig='NC_000001.11',start = 14275, stop = 15000,truncate=True, stepper = "nofilter")
-#
-#read_a = next(f_fetch,False)
-#pileup_a = next(f_pileup,False)
-#pileup_a.reference_pos
-#pileup_a.get_num_aligned()
-
 
 if __name__ == "__main__":
     main()

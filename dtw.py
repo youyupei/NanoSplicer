@@ -23,11 +23,12 @@ class dtw(object):
                     
         '''
     def __init__(self, candidate_squiggle, junction_squiggle,
-                 band_prop, dist_type=None):
+                 band_prop, dist_type=None, truncate_quantile = None):
         self.candidate_squiggle = candidate_squiggle
         self.junction_squiggle = junction_squiggle
         self.band_prop = band_prop
         self.dist_type = dist_type
+        self.truncate_quantile = truncate_quantile
 
     def __cost(self, x, *y, dist_type=None):
         from scipy.stats import norm
@@ -44,22 +45,39 @@ class dtw(object):
             diff = min(abs(a-b_mean))
             return diff/b_std
 
-        def __log_likelihood(a, b_mean, b_std):
+        def __log_likelihood(a, b_mean, b_std, 
+                                truncate_quantile = self.truncate_quantile):
             '''
             negative log likelihood by assuming normal distribution
             retrun:
                 log density in standard normal distribution
             '''
-            #return -np.log(norm.pdf(a, b_mean, b_std))
-            #diff = min(abs(a - b_mean))
-            diff = abs(a - b_mean)
-            z = diff/b_std
-            laplacc_b = b_std/np.sqrt(2)
-            #
+            def laplace_log_density(x, mean, sd, max_diff = None):                
+                diff = np.abs(mean - x)
+                if max_diff:
+                    diff = np.minimum(diff, max_diff)
+                b = sd/np.sqrt(2)
+                return -np.log(2*b) - diff/b
+            def laplace_quantile(mean, sd, q):
+                b = sd/np.sqrt(2)
+                if q > 0.5:
+                    return mean - b*np.log(2-2*q) 
+                else:
+                    return mean + b*np.log(2*q) 
+
+            if truncate_quantile:
+                max_diff = np.abs(b_mean - 
+                    laplace_quantile(b_mean, b_std, q = truncate_quantile))
+                return -1 * laplace_log_density(a, b_mean, b_std, max_diff)
+            else:
+                return -1 * laplace_log_density(a, b_mean, b_std)
             
-            #return 0.9189385 + z**2/2 #norm
-            #return 1.14473 + log(1+z**2) # t with df = 1
-            return np.log(2*laplacc_b) + diff/laplacc_b
+            # diff = abs(a - b_mean)
+            # z = diff/b_std
+            # laplacc_b = b_std/np.sqrt(2)
+            # #return 0.9189385 + z**2/2 #norm
+            # #return 1.14473 + log(1+z**2) # t with df = 1
+            # return np.log(2*laplacc_b) + diff/laplacc_b
 
 
         if len(y) not in (1,2):

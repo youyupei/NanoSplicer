@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import textwrap
 import concurrent.futures
 import time
 import sys
@@ -15,28 +16,37 @@ from intervaltree import Interval
 from intervaltree import IntervalTree
 from pathlib import Path
 from ont_fast5_api.fast5_interface import get_fast5_file        
+import itertools
+import logging
 
 import helper
 from junction_identification import find_candidate, canonical_site_finder, \
-                                                    candidate_motif_generator
+                                candidate_motif_generator, find_junctions
 from dtw import dtw
-
 
 # parse command line arg
 def parse_arg():
+
+    
     def print_help():
-        print("\n\nUsage: python {} [OPTIONS]".format(argv[0]))
-        print("Options:\n\tIndexing:")
-        print('\t\t-i \t.bam/.sam file (required)')
-        print('\t\t-f \tpath to fast5s (directory path) (required)')
-        print('\t\t-r \tGenome reference file (required)')
-        print("\t\t-o \toutput path, default: 'NanoSplicer_out'")
-        print('\t\t-T \tNumber of events trimmed from scrappie model')
-        print('\t\t-t \tNumber of samples trimmed from raw signal')
-        print('\t\t-F \tFlanking sequence size in each side')
-        print('\t\t-w \twindow size for searching the candidate')
-     
-        return None
+        help_message =\
+        '''
+        Usage: python {} [OPTIONS]
+        Options:
+            -i      .bam/.sam file (required)
+            -f      path to fast5s (required)
+            -r      Genome reference file (required)
+            -o      output path <default: "NanoSplicer_out">
+            -T      Number of events trimmed from scrappie model <default: 2>
+            -t      Number of bases trimmed from raw signam, the raw samples are
+                        match to basecalled bases by tombo <default :6>
+            -F      Flanking sequence size in each side of candidate searching 
+                        window <default: 20>
+            -w      Candidate searching window size <default: 10>
+            
+        '''.format(argv[0])
+
+        print(textwrap.dedent(help_message))
 
     argv = sys.argv
     if len(argv) <= 2:     
@@ -49,10 +59,10 @@ def parse_arg():
                     "genome_ref=","output_path=", "trim_model=",
                     "trim_signal=","dtw_adj","bandwidth=",
                     "flank_size=", "window="])
-    
     except getopt.GetoptError:
+        print("ERROR:Invalid input.")
         print_help()
-        sys.exit(0)
+        sys.exit(1)
 
     # DEFAULT VALUE
     alignment_file, fast5_dir, genome_ref = None, None, None
@@ -63,7 +73,6 @@ def parse_arg():
     bandwidth = 0.4
     flank_size = 20
     window = 10
-
 
     for opt, arg in opts:
         if opt in ('-h', "--help"):
@@ -88,8 +97,7 @@ def parse_arg():
         elif opt in ("-F", "--flank_size"):
            flank_size = int(arg)
         elif opt in ("-w", "--window"):
-           flank_size = int(arg)
-
+           window = int(arg)
 
     # check input
     if not alignment_file or not fast5_dir or not genome_ref:
@@ -154,14 +162,18 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
     #fpass_squiggle = "{}/.tmp/count_pass.tmp".format(output_path)
    
     # loop thought each junction
-    for junc_id, junction in enumerate(all_junctions):
+    for junc_id, junction in all_junctions:
         overlap_read = AlignmentFile.fetch(chrID, junction.begin, junction.end)
         
         # find GT-AG pattern in a window nearby
         donor_lst, acceptor_lst = canonical_site_finder(junction, 
                                           ref_FastaFile, AlignmentFile, 
                                           window, chrID)
-        candidates_tuple = list(itertools.product(donor_lst, acceptor_lst))
+        
+        if not donor_lst or not acceptor_lst:
+            candidates_tuple = []
+        else:
+            candidates_tuple = list(itertools.product(donor_lst, acceptor_lst))
         
         #  add best supported junction if it is not GT-AG
         if (junction.begin, junction.end) not in candidates_tuple:
@@ -199,8 +211,8 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                 tombo_results, tombo_start_clip, tombo_end_clip = \
                     tombo_squiggle_to_basecalls(multi_fast5, read)
             except:
-                #print("tombo resquiggle failed!!")
-                count_in_tmp(ftombo_fail)
+                print("tombo resquiggle failed!!")
+                #count_in_tmp(ftombo_fail)
 
             read_length = len(tombo_results.genome_seq) \
                                  + tombo_start_clip + tombo_end_clip
@@ -223,14 +235,14 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                 if motif_start_read == -1:
                     #print("Warning: Junction squiggle start index point to 
                     #mapped intron, junction squiggle skipped.")
-                    count_in_tmp(fbad_junction_mapping)
+                    #count_in_tmp(fbad_junction_mapping)
                     continue
                 elif g_r_mapping[start_pos_rel_to_mapped_start] == \
                     g_r_mapping[start_pos_rel_to_mapped_start - 1]:
                     motif_start_read += 1 
             else:
                 #print("candidate start pos out of bound.")
-                count_in_tmp(fbad_junction_mapping)
+                #count_in_tmp(fbad_junction_mapping)
                 continue
 
             
@@ -242,11 +254,11 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                 if motif_end_read == -1 + 1:
                     #print("Warning: Junction squiggle end index point to" 
                     # "mapped intron, junction squiggle skipped.")
-                    count_in_tmp(fbad_junction_mapping)
+                    #count_in_tmp(fbad_junction_mapping)
                     continue
             else:
                 #print("candidate end pos out of bound.")
-                count_in_tmp(fbad_junction_mapping)
+                #count_in_tmp(fbad_junction_mapping)
                 continue
 
             # get signal
@@ -265,7 +277,7 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
 
             
             if not len(signal):
-                count_in_tmp(fno_signal_found)
+                #count_in_tmp(fno_signal_found)
                 continue
             else:
                 #count_in_tmp(fpass_squiggle)
@@ -280,9 +292,17 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                                                     uniform_dwell=4)
 
             score_output = []
+            score_trimmed = []
+            score_trimmed2 = []
+            score_trimmed_ref = []
+            cum_path = {}
+            squiggle_match = {}
+            element_wise_logL = {}
+            output_suffix = '_c4'
+            num_of_cand = len(candidates_for_read)
             
             # loop over candidate for each junction within read
-            for i, candidiate in enumerate(candidates_for_read):
+            for j, candidiate in enumerate(candidates_for_read):
                 candidate_squiggle = np.array(model_dic[candidiate],float)
                 
                 # dtw
@@ -290,6 +310,12 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                     dtw_local_alignment(candidate_squiggle=candidate_squiggle, 
                                         junction_squiggle = junction_squiggle)
                 score_output.append(score)
+                
+                # candidate squiggle in matched len of junction suqiggle
+                squiggle_match[j] = candidate_squiggle[path[:,1] - 1, :]
+                cum_path[j] = cum_matrix[path[:, 0], path[:, 1]]            
+                element_wise_logL[j] = np.append(cum_path[j][0],
+                                             cum_path[j][1:] - cum_path[j][:-1])
                 
                 # plotting 
                 if False:
@@ -321,10 +347,31 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                         strand = 0
                     fig.savefig("fig{}_{}.png".format('555f59a2-784b-4fbc-8392-6ff32fd5dcb4', i))
 
-           
-            f = open(output_file, "a")
-            fcntl.flock(f,fcntl.LOCK_EX)
-            f.write('{},{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+            '''
+            number of points contribute to LR
+            '''   
+            #use best matched squiggle as reference
+            ref_cand = squiggle_match[np.argmin(score_output)]
+            ref_element_wise_logL = element_wise_logL[np.argmin(score_output)]
+            out_of_sd = np.zeros(len(junction_squiggle) ,dtype = int)
+            out_of_sd_ind = {}
+            for j in range(num_of_cand):
+                out_of_sd_ind[j] = np.zeros(len(junction_squiggle) ,dtype = int)
+
+            
+            for x in range(len(junction_squiggle)):
+                for j in range(num_of_cand):
+                    if squiggle_match[j][x,0] - ref_cand[x,0] > ref_cand[x,1]:
+                        out_of_sd[x] = 1
+                        out_of_sd_ind[j][x] = 1
+            
+            for j in range(num_of_cand):
+                score_trimmed.append(sum(out_of_sd * element_wise_logL[j]))
+                score_trimmed2.append(sum(out_of_sd_ind[j] * element_wise_logL[j]))
+                score_trimmed_ref.append(sum(out_of_sd_ind[j] * ref_element_wise_logL))
+
+            f = open(output_file[:-4]+output_suffix+'.tsv', "a")
+            f.write('{},{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
                         junction[0],
                         junction[1],
                         ','.join([str(x)+','+str(y) for x,y in candidates_pos]),
@@ -332,10 +379,29 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                         read.qname,
                         score_output,
                         len(path),
-                        junc_id
-                                ))
+                        sum(out_of_sd),
+                        score_trimmed,
+                        score_trimmed2,
+                        [sum(x) for x in out_of_sd_ind.values()],
+                        score_trimmed_ref,
+                        junc_id ))
             fcntl.flock(f,fcntl.LOCK_UN)
-            f.close()       
+            f.close()    
+
+            # f = open(output_file, "a")
+            # fcntl.flock(f,fcntl.LOCK_EX)
+            # f.write('{},{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+            #             junction[0],
+            #             junction[1],
+            #             ','.join([str(x)+','+str(y) for x,y in candidates_pos]),
+            #             score_output.index(min(score_output)), 
+            #             read.qname,
+            #             score_output,
+            #             len(path),
+            #             junc_id
+            #                     ))
+            # fcntl.flock(f,fcntl.LOCK_UN)
+            # f.close()       
 
 
 '''
@@ -442,7 +508,7 @@ def main():
         flank_size, window =  parse_arg()
     
     # test 
-    output_path = 'NanoSplicer_sdnorm_c4'
+    output_path = 'NanoSplicer_out'
 
     os.system("mkdir -p {}".format(output_path))
     
@@ -457,7 +523,10 @@ def main():
     fref = pysam.FastaFile(genome_ref)
     f_fetch = fbam.fetch() # reads iterator
     f_introns = fbam.find_introns(f_fetch) # dictionary
-    chrID = os.path.basename(alignment_file)[:-4] # e.g 'NC_000001.11.bam' to chrID
+    
+    # modified
+    #chrID = os.path.basename(alignment_file)[:-4] # e.g 'NC_000001.11.bam' to chrID
+    chrID = fbam.references[0]
 
     out_fn = "{}/{}.tsv".format(output_path,chrID)
 
@@ -466,30 +535,23 @@ def main():
     for (begin, end), data in f_introns.items():
         intron_tree.addi(begin, end, data)
 
-        ## built non overlapped range
-    intron_tree_non_overlaps = intron_tree.copy()
-    intron_tree_non_overlaps.merge_overlaps()
-    
     all_candidates = []
-    for interval in intron_tree_non_overlaps:
-        candidates = find_candidate(begin=interval.begin,
-                                    end=interval.end, 
-                                    tree=intron_tree, 
+    for interval in find_junctions(intron_tree):
+        candidates = find_candidate(Interval_list=interval, 
                                     window=10, 
-                                    min_primary=25, 
-                                    min_support=200,
+                                    min_primary=0, 
+                                    min_support=0,
                                     secondary_thres=0.0, 
                                     primary_thres=1)
-            
         if candidates:
             all_candidates += candidates
 
     # start to processing the fast5 (multiread format)
     print("running process")
-
+    
     from itertools import repeat
     with concurrent.futures.ProcessPoolExecutor(32) as executor:
-        tqdm(executor.map(run_multifast5, fast5_paths, 
+        results = list(tqdm(executor.map(run_multifast5, list(fast5_paths), 
                      repeat(all_candidates),
                      repeat(alignment_file),
                      repeat(genome_ref),
@@ -499,16 +561,9 @@ def main():
                      repeat(trim_model),
                      repeat(trim_signal),
                      repeat(bandwidth),
-                     repeat(out_fn)))
-        
-
-    # # log finish
-    # log_fn = "{}/{}.tsv".format(output_path,chrID)
-    # log_f = open(log_fn, "a")
-    # fcntl.flock(log_f,fcntl.LOCK_EX)
-    # log_f.write('{} complete'.format(log_fn))
-    # fcntl.flock(log_f,fcntl.LOCK_UN)
-    # log_f.close()   
+                     repeat(out_fn))),total = len(list(fast5_paths)))
+        for result in results:
+            logging.info(result)
 
 def run_test(fast5_path , 
                     all_junctions, 
@@ -523,27 +578,3 @@ def run_test(fast5_path ,
     print(fast5_path)
 if __name__ == "__main__":
     main()
-###############################################################################################
-###############################################################################################
-###############################################################################################
-###############################################################################################
-###############################################################################################
-###############################################################################################
-# test
-# get alignment given genome pos
-
-#
-#all_candidate = []
-#for interval in intron_tree_non_overlaps:
-#    candidates = find_candidate(interval.begin, interval.end, intron_tree, 10)
-#    if candidates:
-#        all_candidate += candidates
-#
-#sum([x.data for x in all_candidate])
-#[(a.get_blocks()[i-1][1], a.get_blocks()[i][0]) for i in range(1, len(a.get_blocks()))]
-#
-#
-#
-#well_supported = [x for x in f_introns.items() if x[1] > 50]
-#sort_well = sorted(well_supported, key = lambda k: k[0][0])
-#sorted([sort_well[i][0][0] - sort_well[i-1][0][0] for i in range(1,len(sort_well))])[1:10]
