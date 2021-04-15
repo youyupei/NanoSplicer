@@ -1,3 +1,7 @@
+# CHROMOSOME_NAME (temp)
+CHROMOSOME_NAME = "NC_000001.11"
+#CHROMOSOME_NAME = "chrIS"
+
 # wether or not output junction squiggles and candidate squiggles matches as csv
 SAVE_DATA = False
 
@@ -12,3 +16,8 @@ MINIMUM_POINT_FOR_DIST_SEG = 4
 
 # prior ratio for sequence pattern
 PRIOR_RATIO = 9
+
+# output
+PLOT = False
+PLOT_LR = False
+RESULT = True

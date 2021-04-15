@@ -19,6 +19,7 @@ Output:
         4. log LR contribution from the distinguishing point         
     Option to output the candidate and junction squiggles
 '''
+
 import textwrap
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -70,7 +71,6 @@ def __log_likelihood(a, b_mean, b_std,
         return norm_log_density(a, b_mean, b_std, max_diff)
     else:
         return norm_log_density(a, b_mean, b_std) 
-
 
 # parse command line arg
 def parse_arg():
@@ -165,10 +165,8 @@ def parse_arg():
             bandwidth, trim_model, trim_signal, flank_size, window, pd_file
 
 def main():
-    # temp para
-    #chrID = "chrIS"
-    chrID = "NC_000001.11"
-    out_fn = 'NanoSplicer_out.csv'
+    chrID = CHROMOSOME_NAME
+    out_fn = 'NanoSplicer_out'
 
     # parse command line argument
     fast5_dir, output_path, alignment_file, genome_ref, \
@@ -255,6 +253,11 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
         if not read:
             print("read {} is not found!".format(row.id))
             continue
+        # get junction alignment Q
+        junction_cigar = \
+            get_junction_cigar(row.site_minimap[0], row.site_minimap[1], read.cigarstring, read.reference_start, half_motif_size=25)
+        junction_alignment_quality =\
+            get_junc_map_quality(junction_cigar)
 
         # get candidate motifs
         candidates_pos, candidate_motif, motif_start, motif_end = \
@@ -355,7 +358,6 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                                                 uniform_dwell=UNIFORM_DWELL,
                                                 customised_sd = None)
 
-
         cum_path = {}
         score_dict = {}
         squiggle_match = {}
@@ -393,51 +395,10 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
             aligned_base[j] = candidate[trim_model + int((path[0,1] - 1)/UNIFORM_DWELL): trim_model+ int((path[-1,1] - 1)/UNIFORM_DWELL) + 1]
             #cum_path[j] = cum_matrix[path[:, 0], path[:, 1]]
 
-            
-
-            def find_candidate_middle_pos(squiggle_match):
-                '''
-                function for plot bases 
-                '''
-                out = [0]
-                for i in range(1, len(squiggle_match)):
-                    if (squiggle_match[i] == squiggle_match[i-1]).all():
-                        out[-1] += 0.5
-                    else:
-                        out.append(i)
-                return(out)
-
-            
-            def get_distinguishing_segment(matched_candidate_ref, 
-                            matched_candidate_ls):
-                '''
-                Input:
-                    matched_candidate_ref: For the candidate that used as reference,  mean and sd from 
-                                                                            that matched to junction squiggle
-                    matched_candidate_ls: a list of queried candidate squiggle
-                Output:
-                    list of distinguishing segment: [(seg1_start, seg1_end), ...]
-                '''
-                matched_candidate_ls.append(matched_candidate_ref)
-
-                all_means = np.array([x[:,0] for x in matched_candidate_ls])
-                is_end_boundary = np.any(all_means[:,1:] != all_means[:,:-1], axis = 0)
-                end_index = np.arange(1,len(is_end_boundary) + 1)[is_end_boundary]
-                segment = list(zip(np.append(0, end_index[:-1]), end_index))
-                seg_start = np.array(segment)[:,0]
-                
-                is_dist_seg = \
-                        np.any(
-                            np.abs(
-                                all_means[:,seg_start] - matched_candidate_ref[seg_start,0]) \
-                                > matched_candidate_ref[seg_start,1], axis = 0)
-                
-                return np.array(segment), is_dist_seg
-
 
 ################################# segment median (pairwise version)
             # LR plot
-            if True and j == num_of_cand - 1:
+            if PLOT and j == num_of_cand - 1:
 
                 # minimap2 candidate as reference
                 matched_candidate_ref = squiggle_match[index_m]
@@ -604,7 +565,7 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
 
 ################################# segment median LR (pairwise version) LR contribution
             # LR plot
-            if True and j == num_of_cand - 1:
+            if PLOT_LR and j == num_of_cand - 1:
 
                 # minimap2 candidate as reference
                 matched_candidate_ref = squiggle_match[index_m]
@@ -712,10 +673,6 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                     # candidate_squiggle[:,0] = (candidate_squiggle[:,0] - med_c) / mad_c
                     # candidate_squiggle[:,1] = candidate_squiggle[:,1] / mad_c
                 
-        
-
-
-
             if SAVE_DATA:
                 np.savetxt("{}_candidate{}_{}.csv".format(output_prefix, read.qname,j), squiggle_match[j], delimiter=",")
                 np.savetxt("junction_squiggle{}.csv".format(read.qname), junction_squiggle, delimiter=",")
@@ -759,11 +716,10 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                 fig.savefig("{}_fig{}_{}.png".format(output_prefix,read.qname, j))
                 plt.close()
 
-
 ################################# segment median (pairwise version) result output
             
 
-            if False and j == num_of_cand - 1:
+            if RESULT and j == num_of_cand - 1:
                 # minimap2 candidate as reference
                 matched_candidate_ref = squiggle_match[index_m]
                 squiggle_match_list = [squiggle_match[x] for x in range(num_of_cand)]
@@ -814,39 +770,69 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
 
 
 
-                
-                f = open(output_file+'.tsv', "a")
-                fcntl.flock(f,fcntl.LOCK_EX)
-                f.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                    str(row.id),
-                    str(row.site_minimap),
-                    str(row.site_NanoSplicer),
-                    str(row.minimap),
-                    str(row.NanoSplicer),
-                    str(row.S_i),
-                    ','.join([str(x) for x in row.junc_supported]),
-                    str(row.num_cand),
-                    ','.join([str(x) for x in row.candidates]),
-                    ','.join([str(x) for x in row.candidate_preference]),
-                    str(row.junc_id),
-                    str(row.junc_map_cigar),
-                    str(row.junc_map_q),
-                    ','.join([str(x) for x in p_wise_Si]),
-                    ','.join([str(x) for x in segment_Si]),
-                    ','.join([str(x) for x in n_of_aligned_event]),
-                    ','.join([str(x) for x in worst_even_logL_list]),
-                    ','.join([str(x) for x in dist_seg_logLR]),
-                    ','.join([str(len(x)) for x in dist_seg_logLR_individual]),
-                    ','.join([str(x) for x in post_prob]),
-                    ','.join([str(x) for x in post_prob_prior]),
-                    str(sd_of_median)
-                    ))
-                    # fcntl.flock(f,fcntl.LOCK_UN)
-                f.close()
+                if IS_SEQUINS_DATA:
+                    f = open(output_file+'.tsv', "a")
+                    fcntl.flock(f,fcntl.LOCK_EX)
+                    f.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                        str(row.id),
+                        str(row.site_minimap),
+                        str(row.site_NanoSplicer),
+                        str(row.minimap),
+                        str(row.NanoSplicer),
+                        str(row.S_i),
+                        ','.join([str(x) for x in row.junc_supported]),
+                        str(row.num_cand),
+                        ','.join([str(x) for x in row.candidates]),
+                        ','.join([str(x) for x in row.candidate_preference]),
+                        str(row.junc_id),
+                        str(row.junc_map_cigar),
+                        str(row.junc_map_q),
+                        ','.join([str(x) for x in p_wise_Si]),
+                        ','.join([str(x) for x in segment_Si]),
+                        ','.join([str(x) for x in n_of_aligned_event]),
+                        ','.join([str(x) for x in worst_even_logL_list]),
+                        ','.join([str(x) for x in dist_seg_logLR]),
+                        ','.join([str(len(x)) for x in dist_seg_logLR_individual]),
+                        ','.join([str(x) for x in post_prob]),
+                        ','.join([str(x) for x in post_prob_prior]),
+                        str(sd_of_median),
+                        str(row.true_junction_match),
+                        row.transID
+                        ))
+                        # fcntl.flock(f,fcntl.LOCK_UN)
+                    f.close()
                
 
-
-
+                else:
+                    f = open(output_file+'.tsv', "a")
+                    fcntl.flock(f,fcntl.LOCK_EX)
+                    f.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                        str(row.id),
+                        str(row.site_minimap),
+                        str(row.site_NanoSplicer),
+                        str(row.minimap),
+                        str(row.NanoSplicer),
+                        str(row.S_i),
+                        ','.join([str(x) for x in row.junc_supported]),
+                        str(row.num_cand),
+                        ','.join([str(x) for x in row.candidates]),
+                        ','.join([str(x) for x in row.candidate_preference]),
+                        str(row.junc_id),
+                        str(row.junc_map_cigar),
+                        str(row.junc_map_q),
+                        ','.join([str(x) for x in p_wise_Si]),
+                        ','.join([str(x) for x in segment_Si]),
+                        ','.join([str(x) for x in n_of_aligned_event]),
+                        ','.join([str(x) for x in worst_even_logL_list]),
+                        ','.join([str(x) for x in dist_seg_logLR]),
+                        ','.join([str(len(x)) for x in dist_seg_logLR_individual]),
+                        ','.join([str(x) for x in post_prob]),
+                        ','.join([str(x) for x in post_prob_prior]),
+                        str(sd_of_median)
+                        ))
+                        # fcntl.flock(f,fcntl.LOCK_UN)
+                    f.close()
+               
 def get_gaps_in_read(AlignedSegment):
     blocks = AlignedSegment.get_blocks()
     gap = set([(blocks[i-1][1], blocks[i][0]) for i in range(len(blocks))])
@@ -989,8 +975,85 @@ def sd_from_tombo(tombo_results, std_ref, read_seq):
     expected_means, _ = std_ref.get_exp_levels_from_seq(read_seq, rev_strand=False)
     return np.std(expected_means - med_seg)
 
+# seg calculation
+def find_candidate_middle_pos(squiggle_match):
+    '''
+    function for plot bases 
+    '''
+    out = [0]
+    for i in range(1, len(squiggle_match)):
+        if (squiggle_match[i] == squiggle_match[i-1]).all():
+            out[-1] += 0.5
+        else:
+            out.append(i)
+    return(out)
+
+def get_distinguishing_segment(matched_candidate_ref, 
+                matched_candidate_ls):
+    '''
+    Input:
+        matched_candidate_ref: For the candidate that used as reference,  mean and sd from 
+                                                                that matched to junction squiggle
+        matched_candidate_ls: a list of queried candidate squiggle
+    Output:
+        list of distinguishing segment: [(seg1_start, seg1_end), ...]
+    '''
+    matched_candidate_ls.append(matched_candidate_ref)
+
+    all_means = np.array([x[:,0] for x in matched_candidate_ls])
+    is_end_boundary = np.any(all_means[:,1:] != all_means[:,:-1], axis = 0)
+    end_index = np.arange(1,len(is_end_boundary) + 1)[is_end_boundary]
+    segment = list(zip(np.append(0, end_index[:-1]), end_index))
+    seg_start = np.array(segment)[:,0]
+    
+    is_dist_seg = \
+            np.any(
+                np.abs(
+                    all_means[:,seg_start] - matched_candidate_ref[seg_start,0]) \
+                    > matched_candidate_ref[seg_start,1], axis = 0)
+    
+    return np.array(segment), is_dist_seg
+
+# function for getting the junction mapping quality
+def get_junction_cigar(junction1, junction2, cigar, read_start, half_motif_size=25):
+    '''
+    input:
+        junction1: left-hand side splice junction
+        junction2: right-hand side splice junction
+        cigar: cigar string for queried reads
+        read_start：ref pos that first base of the reads mapped to
+        harf_motif_size:
+            motif_start = junc1 - harf_motif_size
+            motif_end = junc2 + harf_motif_size
+    '''
+    cigar_long = []
+    for count, type in re.findall('(\d+)([A-Za-z])', cigar):
+        cigar_long += int(count) * [type]
+    
+    junc1_rel_read_start = junction1 - read_start
+    junc2_rel_read_start = junction2 - read_start
+    
+    junction_cigar = ''
+    ref_index = -1
+    for i in cigar_long:
+        if i in 'MND':
+            ref_index += 1
+        if ref_index >= junc1_rel_read_start - half_motif_size \
+                and ref_index < junc2_rel_read_start + half_motif_size and i != 'N':
+            #print(i, ref_index + read_start)
+            junction_cigar +=  i
+        if ref_index >= junc2_rel_read_start + half_motif_size:
+            return junction_cigar
+        
+def get_junc_map_quality(cigar):
+    '''
+    The junc map quality is simply as the proportion of 'M's within the cigar string
+    '''
+    if not cigar:
+        return np.nan
+    else:
+        return cigar.count('M')/len(cigar)
+
 
 if __name__ == "__main__":
     main()
-
-__log_likelihood(np.median(event), squiggle_match[i-1,0], squiggle_match[i-1,1], truncate_quantile = 0)
