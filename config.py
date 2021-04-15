@@ -1,6 +1,6 @@
 # CHROMOSOME_NAME (temp)
-CHROMOSOME_NAME = "NC_000001.11"
-#CHROMOSOME_NAME = "chrIS"
+#CHROMOSOME_NAME = "NC_000001.11"
+CHROMOSOME_NAME = "chrIS"
 
 # wether or not output junction squiggles and candidate squiggles matches as csv
 SAVE_DATA = False

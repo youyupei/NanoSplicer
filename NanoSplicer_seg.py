@@ -785,8 +785,8 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                         ','.join([str(x) for x in row.candidates]),
                         ','.join([str(x) for x in row.candidate_preference]),
                         str(row.junc_id),
-                        str(row.junc_map_cigar),
-                        str(row.junc_map_q),
+                        str(junction_cigar),
+                        str(junction_alignment_quality),
                         ','.join([str(x) for x in p_wise_Si]),
                         ','.join([str(x) for x in segment_Si]),
                         ','.join([str(x) for x in n_of_aligned_event]),
@@ -801,7 +801,7 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                         ))
                         # fcntl.flock(f,fcntl.LOCK_UN)
                     f.close()
-               
+
 
                 else:
                     f = open(output_file+'.tsv', "a")
@@ -818,8 +818,8 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                         ','.join([str(x) for x in row.candidates]),
                         ','.join([str(x) for x in row.candidate_preference]),
                         str(row.junc_id),
-                        str(row.junc_map_cigar),
-                        str(row.junc_map_q),
+                        str(junction_cigar),
+                        str(junction_alignment_quality),
                         ','.join([str(x) for x in p_wise_Si]),
                         ','.join([str(x) for x in segment_Si]),
                         ','.join([str(x) for x in n_of_aligned_event]),
