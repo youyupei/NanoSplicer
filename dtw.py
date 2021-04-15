@@ -45,6 +45,35 @@ class dtw(object):
             diff = min(abs(a-b_mean))
             return diff/b_std
 
+        # def __log_likelihood(a, b_mean, b_std, 
+        #                         truncate_quantile = self.truncate_quantile):
+        #     '''
+        #     negative log likelihood by assuming normal distribution
+        #     retrun:
+        #         log density in standard normal distribution
+        #     '''
+        #     def laplace_log_density(x, mean, sd, max_diff = None):                
+        #         diff = np.abs(mean - x)
+        #         if max_diff:
+        #             diff = np.minimum(diff, max_diff)
+        #         b = sd/np.sqrt(2)
+        #         return -np.log(2*b) - diff/b
+        #     def laplace_quantile(mean, sd, q):
+        #         b = sd/np.sqrt(2)
+        #         if q > 0.5:
+        #             return mean - b*np.log(2-2*q) 
+        #         else:
+        #             return mean + b*np.log(2*q) 
+
+        #     if truncate_quantile:
+        #         max_diff = np.abs(b_mean - 
+        #             laplace_quantile(b_mean, b_std, q = truncate_quantile))
+        #         return -1 * laplace_log_density(a, b_mean, b_std, max_diff)
+        #     else:
+        #         return -1 * laplace_log_density(a, b_mean, b_std)
+
+
+        # normal version
         def __log_likelihood(a, b_mean, b_std, 
                                 truncate_quantile = self.truncate_quantile):
             '''
@@ -52,26 +81,18 @@ class dtw(object):
             retrun:
                 log density in standard normal distribution
             '''
-            def laplace_log_density(x, mean, sd, max_diff = None):                
-                diff = np.abs(mean - x)
+            def norm_log_density(x, mean, sd, max_diff = None):                
+                diff = np.abs(mean - x)            
                 if max_diff:
                     diff = np.minimum(diff, max_diff)
-                b = sd/np.sqrt(2)
-                return -np.log(2*b) - diff/b
-            def laplace_quantile(mean, sd, q):
-                b = sd/np.sqrt(2)
-                if q > 0.5:
-                    return mean - b*np.log(2-2*q) 
-                else:
-                    return mean + b*np.log(2*q) 
+                z = diff/sd
+                return -np.log(sd)-0.9189385 - z**2/2 #norm
 
             if truncate_quantile:
-                max_diff = np.abs(b_mean - 
-                    laplace_quantile(b_mean, b_std, q = truncate_quantile))
-                return -1 * laplace_log_density(a, b_mean, b_std, max_diff)
+                max_diff = 2.326348 * b_std
+                return -1 * norm_log_density(a, b_mean, b_std, max_diff)
             else:
-                return -1 * laplace_log_density(a, b_mean, b_std)
-            
+                return -1 * norm_log_density(a, b_mean, b_std)           
             # diff = abs(a - b_mean)
             # z = diff/b_std
             # laplacc_b = b_std/np.sqrt(2)

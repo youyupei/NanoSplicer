@@ -371,6 +371,7 @@ def run_multifast5(fast5_path, all_junctions, AlignmentFile, ref_FastaFile,
                 score_trimmed_ref.append(sum(out_of_sd_ind[j] * ref_element_wise_logL))
 
             f = open(output_file[:-4]+output_suffix+'.tsv', "a")
+            fcntl.flock(f,fcntl.LOCK_EX)
             f.write('{},{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
                         junction[0],
                         junction[1],

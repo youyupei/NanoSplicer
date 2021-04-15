@@ -25,6 +25,31 @@ def reverse_complement(seq):
 	letters = [complement[base] for base in seq]
 	return ''.join(letters)[::-1]
 
+# tombo expected squiggle
+def sequence_to_squiggle_tombo(seq, std_ref, customised_sd = None):
+	kmer_expect = std_ref.get_exp_levels_from_seq(seq, rev_strand=False)
+	if customised_sd:
+		kmer_expect[1] = np.repeat(customised_sd, len(kmer_expect[1]))
+	# reorganise the output into two columns which are means and sds
+	kmer_expect = np.array(kmer_expect).T
+	return kmer_expect
+
+def expect_squiggle_dict_tombo(seqs, std_ref, uniform_dwell=4, customised_sd = None):
+	
+	if seqs:
+		expect_squiggle_dic = defaultdict(list)
+		for seq in seqs:
+			squiggle = sequence_to_squiggle_tombo(seq = seq, std_ref = std_ref, customised_sd = customised_sd)
+			if uniform_dwell > 1:			
+				for mean, std in squiggle:
+					expect_squiggle_dic[seq] += \
+								[[mean, std]] * uniform_dwell
+			else:
+				expect_squiggle_dic[seq] = squiggle
+	else:
+		print("No valid input detected when generating expect squiggle")
+		sys.exit(0)
+	return expect_squiggle_dic
 
 # scrappie squiggle
 def sequence_to_squiggle(seq, trim = 0, model = 'squiggle_r94'):
