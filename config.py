@@ -1,6 +1,7 @@
 # CHROMOSOME_NAME (temp)
 #CHROMOSOME_NAME = "NC_000001.11"
 CHROMOSOME_NAME = "chrIS"
+IS_SEQUINS_DATA = True
 
 # wether or not output junction squiggles and candidate squiggles matches as csv
 SAVE_DATA = False
