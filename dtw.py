@@ -23,12 +23,12 @@ class dtw(object):
                     
         '''
     def __init__(self, candidate_squiggle, junction_squiggle,
-                 band_prop, dist_type=None, truncate_quantile = None):
+                 band_prop, dist_type=None, max_z = None):
         self.candidate_squiggle = candidate_squiggle
         self.junction_squiggle = junction_squiggle
         self.band_prop = band_prop
         self.dist_type = dist_type
-        self.truncate_quantile = truncate_quantile
+        self.max_z = max_z
 
     def __cost(self, x, *y, dist_type=None):
         from scipy.stats import norm
@@ -75,7 +75,7 @@ class dtw(object):
 
         # normal version
         def __log_likelihood(a, b_mean, b_std, 
-                                truncate_quantile = self.truncate_quantile):
+                                max_z = self.max_z):
             '''
             negative log likelihood by assuming normal distribution
             retrun:
@@ -88,8 +88,8 @@ class dtw(object):
                 z = diff/sd
                 return -np.log(sd)-0.9189385 - z**2/2 #norm
 
-            if truncate_quantile:
-                max_diff = 2.326348 * b_std
+            if max_z:
+                max_diff = max_z * b_std
                 return -1 * norm_log_density(a, b_mean, b_std, max_diff)
             else:
                 return -1 * norm_log_density(a, b_mean, b_std)           

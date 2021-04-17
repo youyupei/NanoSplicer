@@ -53,7 +53,7 @@ from dtw import dtw
 from config import *
 
 def __log_likelihood(a, b_mean, b_std, 
-                        truncate_quantile = 0.01):
+                        max_z = MAX_Z):
     '''
      log likelihood by assuming normal distribution
     retrun:
@@ -66,8 +66,8 @@ def __log_likelihood(a, b_mean, b_std,
         z = diff/sd
         return -np.log(sd)-0.9189385 - z**2/2 #norm
 
-    if truncate_quantile:
-        max_diff = 2.326348 * b_std
+    if max_z:
+        max_diff = max_z * b_std
         return norm_log_density(a, b_mean, b_std, max_diff)
     else:
         return norm_log_density(a, b_mean, b_std) 
@@ -230,7 +230,7 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                    junction_squiggle=junction_squiggle, 
                    band_prop = bandwidth,
                    dist_type = dist_type, 
-                   truncate_quantile = 0.01).dtw_local_alignment()
+                   max_z = MAX_Z).dtw_local_alignment()
 
     # prepare the inputs
     AlignmentFile = pysam.AlignmentFile(AlignmentFile) 
@@ -479,14 +479,14 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                     ax.set_title('Log LR: {:.2f}, average Log-Lik: {:.2f}, post probability: {:.3f}, candidate_preference: {}, post probability(seq prior ratio = 9): {:.3f} '.format(
                         dist_seg_LR[cand], 
                         np.mean(
-                            even_wise_log_likelihood(junction_squiggle, squiggle_match_list[cand],truncate_quantile = 0.01)),
+                            even_wise_log_likelihood(junction_squiggle, squiggle_match_list[cand], max_z=MAX_Z)),
                         post_prob[cand], 
                         candidate_preference[cand], 
                         post_prob_prior[cand]), y=1.0, pad=-14)
                 fig.suptitle('minimap2 candidate likelihood: {:.2f}, average Log-Lik: {:.2f}, post probability: {:.3f}, candidate_preference: {}, post probability(seq prior ratio = 9): {:.3f}'.format(
                         dist_seg_LR[index_m], 
                         np.mean(
-                            even_wise_log_likelihood(junction_squiggle, squiggle_match_list[index_m],truncate_quantile = 0.01)),
+                            even_wise_log_likelihood(junction_squiggle, squiggle_match_list[index_m], max_z=MAX_Z)),
                         post_prob[index_m],
                         candidate_preference[index_m], 
                         post_prob_prior[index_m]))
@@ -761,7 +761,7 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                 post_prob_prior = post_prob_prior/sum(post_prob_prior)
 
                 # segment abs diff
-                even_logL_list = [even_wise_log_likelihood(junction_squiggle, x,truncate_quantile = 0.01) for x in squiggle_match_list]
+                even_logL_list = [even_wise_log_likelihood(junction_squiggle, x, max_z=MAX_Z) for x in squiggle_match_list]
                 p_wise_Si = [score_dict[x]/len(junction_squiggle) for x in range(num_of_cand)]
                 n_of_aligned_event = [len(x) for x in even_logL_list]
                 segment_Si = [np.mean(x) for x in even_logL_list]
@@ -937,7 +937,7 @@ def median_denoise(junction_squiggle, squiggle_match_list):
     median_junction_squiggle = np.append(median_junction_squiggle,[np.median(event)] * len(event))
     return(median_junction_squiggle)
 
-def even_wise_log_likelihood(junction_squiggle, squiggle_match,truncate_quantile):
+def even_wise_log_likelihood(junction_squiggle, squiggle_match, max_z):
     even_wise_likelihood = np.array([])
     event = junction_squiggle[0:1]
     
@@ -950,7 +950,7 @@ def even_wise_log_likelihood(junction_squiggle, squiggle_match,truncate_quantile
                 __log_likelihood(
                     np.median(event), 
                     squiggle_match[i-1,0], 
-                    squiggle_match[i-1,1], truncate_quantile = truncate_quantile))
+                    squiggle_match[i-1,1], max_z = max_z))
             
             event = np.array([junction_squiggle[i]])
     even_wise_likelihood = np.append(
@@ -958,7 +958,7 @@ def even_wise_log_likelihood(junction_squiggle, squiggle_match,truncate_quantile
         __log_likelihood(
                     np.median(event), 
                     squiggle_match[-1,0], 
-                    squiggle_match[-1,1], truncate_quantile = truncate_quantile)
+                    squiggle_match[-1,1], max_z = max_z)
         )
     return(even_wise_likelihood)
 
@@ -1010,7 +1010,7 @@ def get_distinguishing_segment(matched_candidate_ref,
             np.any(
                 np.abs(
                     all_means[:,seg_start] - matched_candidate_ref[seg_start,0]) \
-                    > matched_candidate_ref[seg_start,1], axis = 0)
+                    > DIST_SD * matched_candidate_ref[seg_start,1], axis = 0)
     
     return np.array(segment), is_dist_seg
 
