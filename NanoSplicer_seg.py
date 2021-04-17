@@ -19,7 +19,7 @@ Output:
         4. log LR contribution from the distinguishing point         
     Option to output the candidate and junction squiggles
 '''
-
+import importlib
 import textwrap
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -50,27 +50,9 @@ from junction_identification import find_candidate, canonical_site_finder, \
 from dtw import dtw
 
 # configuration
-from config import *
+#from config import *
 
-def __log_likelihood(a, b_mean, b_std, 
-                        max_z = MAX_Z):
-    '''
-     log likelihood by assuming normal distribution
-    retrun:
-        log density in standard normal distribution
-    '''
-    def norm_log_density(x, mean, sd, max_diff = None):                
-        diff = np.abs(mean - x)
-        if max_diff is not None:
-            diff = np.minimum(diff, max_diff)
-        z = diff/sd
-        return -np.log(sd)-0.9189385 - z**2/2 #norm
 
-    if max_z:
-        max_diff = max_z * b_std
-        return norm_log_density(a, b_mean, b_std, max_diff)
-    else:
-        return norm_log_density(a, b_mean, b_std) 
 
 # parse command line arg
 def parse_arg():
@@ -89,7 +71,7 @@ def parse_arg():
             -F      Flanking sequence size in each side of candidate searching 
                         window <default: 20>
             -w      Candidate searching window size <default: 10>
-            
+            -c      config file name
         '''.format(argv[0])
 
         print(textwrap.dedent(help_message))
@@ -100,11 +82,11 @@ def parse_arg():
         sys.exit(0)
     
     try: 
-        opts, args = getopt.getopt(argv[1:],"hi:f:r:o:T:t:ab:F:w:",
+        opts, args = getopt.getopt(argv[1:],"hi:f:r:o:T:t:ab:F:w:c:",
                     ["help=","input_alignment=","input_fast5_dir=",
                     "genome_ref=","output_path=", "trim_model=",
                     "trim_signal=","dtw_adj","bandwidth=",
-                    "flank_size=", "window="])
+                    "flank_size=", "window=", "config_file="])
     except getopt.GetoptError:
         print("ERROR:Invalid input.")
         print_help()
@@ -119,6 +101,7 @@ def parse_arg():
     bandwidth = 0.4
     flank_size = 20
     window = 10
+    config_file = 'config'
     print(opts)
     pd_file = args[0]
 
@@ -146,6 +129,8 @@ def parse_arg():
            flank_size = int(arg)
         elif opt in ("-w", "--window"):
            window = int(arg)
+        elif opt in ("-c", "--config_file"):
+           config_file = str(arg)
 
     # check input
     if not alignment_file or not fast5_dir or not genome_ref:
@@ -162,17 +147,27 @@ def parse_arg():
                    dist_type = dist_type).dtw_local_alignment()
     
     return fast5_dir, output_path, alignment_file, genome_ref, \
-            bandwidth, trim_model, trim_signal, flank_size, window, pd_file
+            bandwidth, trim_model, trim_signal, flank_size, \
+             window,config_file, pd_file
 
 def main():
-    chrID = CHROMOSOME_NAME
-    out_fn = 'NanoSplicer_out'
-
     # parse command line argument
     fast5_dir, output_path, alignment_file, genome_ref, \
         bandwidth, trim_model, trim_signal, \
-        flank_size, window, pd_file =  parse_arg()
+        flank_size, window,cfg_file, pd_file =  parse_arg()
+
+    # import global variable from config file
+    mdl = importlib.import_module(cfg_file)
+    if "__all__" in mdl.__dict__:
+        names = mdl.__dict__["__all__"]
+    else:
+        names = [x for x in mdl.__dict__ if not x.startswith("_")]
+    globals().update({k: getattr(mdl, k) for k in names})
     
+
+    chrID = CHROMOSOME_NAME
+    out_fn = OUTPUT_FILENAME
+
     # import data
     test_df = pd.read_hdf(pd_file, key = 'data')
     
@@ -416,9 +411,9 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                     segment, is_dist_seg = segment_list[cand]
                     is_dist_seg = is_dist_seg & (segment[:,1] - segment[:,0] >= MINIMUM_POINT_FOR_DIST_SEG)
                     p_wise_LR = __log_likelihood(junction_squiggle_median, 
-                                    squiggle_match[cand][:,0],squiggle_match[cand][:,1]) -\
+                                    squiggle_match[cand][:,0],squiggle_match[cand][:,1],max_z = MAX_Z) -\
                                  __log_likelihood(junction_squiggle_median, 
-                                    matched_candidate_ref[:,0],matched_candidate_ref[:,1])
+                                    matched_candidate_ref[:,0],matched_candidate_ref[:,1], max_z = MAX_Z)
 
                     dist_seg_LR.append(sum(p_wise_LR[segment[is_dist_seg][:,0]]))
                 
@@ -586,9 +581,9 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                     segment, is_dist_seg = segment_list[cand]
                     is_dist_seg = is_dist_seg & (segment[:,1] - segment[:,0] >= MINIMUM_POINT_FOR_DIST_SEG)
                     p_wise_LR = __log_likelihood(junction_squiggle_median, 
-                                    squiggle_match[cand][:,0],squiggle_match[cand][:,1]) -\
+                                    squiggle_match[cand][:,0],squiggle_match[cand][:,1],max_z = MAX_Z) -\
                                  __log_likelihood(junction_squiggle_median, 
-                                    matched_candidate_ref[:,0],matched_candidate_ref[:,1])
+                                    matched_candidate_ref[:,0],matched_candidate_ref[:,1], max_z = MAX_Z)
                     p_wise_LR_list.append(p_wise_LR)
 
                     dist_seg_LR.append(sum(p_wise_LR[segment[is_dist_seg][:,0]]))
@@ -743,9 +738,9 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
 
                     # point wise likelihood ratio (match the junction squiggle len)
                     p_wise_logLR = __log_likelihood(junction_squiggle_median, 
-                                    squiggle_match[cand][:,0],squiggle_match[cand][:,1]) -\
+                                    squiggle_match[cand][:,0],squiggle_match[cand][:,1], max_z = MAX_Z) -\
                                  __log_likelihood(junction_squiggle_median, 
-                                    matched_candidate_ref[:,0],matched_candidate_ref[:,1])
+                                    matched_candidate_ref[:,0],matched_candidate_ref[:,1], max_z = MAX_Z)
 
                     # total log LR (a segment is one data point)
                     dist_seg_logLR.append(sum(p_wise_logLR[segment[is_dist_seg][:,0]]))
@@ -1054,6 +1049,25 @@ def get_junc_map_quality(cigar):
     else:
         return cigar.count('M')/len(cigar)
 
+def __log_likelihood(a, b_mean, b_std, 
+                        max_z):
+    '''
+     log likelihood by assuming normal distribution
+    retrun:
+        log density in standard normal distribution
+    '''
+    def norm_log_density(x, mean, sd, max_diff = None):                
+        diff = np.abs(mean - x)
+        if max_diff is not None:
+            diff = np.minimum(diff, max_diff)
+        z = diff/sd
+        return -np.log(sd)-0.9189385 - z**2/2 #norm
+
+    if max_z:
+        max_diff = max_z * b_std
+        return norm_log_density(a, b_mean, b_std, max_diff)
+    else:
+        return norm_log_density(a, b_mean, b_std) 
 
 if __name__ == "__main__":
     main()

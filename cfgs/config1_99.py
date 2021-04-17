@@ -30,8 +30,8 @@ MINIMUM_POINT_FOR_DIST_SEG = 4
 PRIOR_RATIO = 9
 
 # output
-PLOT = True
-PLOT_LR = True
-RESULT = False
-OUTPUT_FILENAME = 'NanoSplicer_out'
+PLOT = False
+PLOT_LR = False
+RESULT = True
+OUTPUT_FILENAME = 'NanoSplicer_out1_99'
 
