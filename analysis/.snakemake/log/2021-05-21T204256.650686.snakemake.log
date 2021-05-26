@@ -1,0 +1,3 @@
+NameError in line 49 of /data/gpfs/projects/punim0614/yupei/deep_sequins/analysis/pipeline/NanoSplicer_11.3/NanoSplicer_run/seg_version/run1/NanoSplicer/analysis/SnakeFile.py:
+name 'REF_TRANSCRIPT' is not defined
+  File "/data/gpfs/projects/punim0614/yupei/deep_sequins/analysis/pipeline/NanoSplicer_11.3/NanoSplicer_run/seg_version/run1/NanoSplicer/analysis/SnakeFile.py", line 49, in <module>

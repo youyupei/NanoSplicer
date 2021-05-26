@@ -106,7 +106,7 @@ def parse_arg():
     pd_file = args[0]
 
     for opt, arg in opts:
-        if opt in                                                                                                               ('-h', "--help"):
+        if opt in  ("-h", "--help"):                                                                                                   ('-h', "--help"):
             print_help()
             sys.exit(0)
         elif opt in ("-i", "--input_alignment"):
