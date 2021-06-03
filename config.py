@@ -12,13 +12,13 @@ QUANTILE = 0.99
 MAX_Z = scipy.stats.norm.ppf(QUANTILE).round(3)
 
 # Distinguishing segment definition
-DIST_SD = 1
+DIST_SD = 0
 
 # wether or not output junction squiggles and candidate squiggles matches as csv
 SAVE_DATA = False
 
 # wavelet denoising level (0 if wavelet is not applying)
-WAVELET_DENOISE = True
+WAVELET_DENOISE = False
 # WAVELET_LEVEL = 3 
 # np.ceil(np.log(len(squiggle)))
 
@@ -30,8 +30,8 @@ MINIMUM_POINT_FOR_DIST_SEG = 4
 PRIOR_RATIO = 9
 
 # output
-PLOT = True
-PLOT_LR = True
-RESULT = False
+PLOT = False
+PLOT_LR = False
+RESULT = True
 OUTPUT_FILENAME = 'NanoSplicer_out'
 

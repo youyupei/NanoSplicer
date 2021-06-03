@@ -33,6 +33,11 @@ import re
 import numpy as np
 import sys
 import getopt
+from tqdm import tqdm
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing as mp
+
 # modify the output HDF5 file
 class JWR_to_hdf(h5py.File):    
     def __init__(self, Filename):
@@ -67,20 +72,25 @@ class JWR_from_reads:
                 elif op == ref_skip:
                     junc_start = base_position
                     base_position += nt
-                    yield JWR_class(read, (junc_start, base_position))
+                    yield JWR_class(read, (junc_start, base_position),read.reference_name)
         #             introns.append((junc_start, base_position))
         # return introns
 
+
 class JWR_class:
-    def __init__(self, read, loc):
+    def __init__(self, read, loc, chrID):
         '''
         Define a junction within read (JWR)
         Input:
             read: pysam AlignedSegment
             loc: tuple of intron location corresponding to the JWR
         '''
-        self.read = read
+        self.qname = read.qname
+        self.cigarstring = read.cigarstring
+        self.reference_start = read.reference_start
+        self.reference_end =read.reference_end
         self.loc = loc
+        self.chrID = chrID
     def get_JAQ(self, half_motif_size=25):
         '''
         Report the junction alignment quality
@@ -95,10 +105,10 @@ class JWR_class:
         Return the cigar letter of around the JWR
         '''
         cigar_long = []
-        for count, op in re.findall('(\d+)([A-Za-z=])', self.read.cigarstring):
+        for count, op in re.findall('(\d+)([A-Za-z=])', self.cigarstring):
             cigar_long += int(count) * [op]
-        junc1_rel_read_start = self.loc[0] - self.read.reference_start
-        junc2_rel_read_start = self.loc[1] - self.read.reference_start
+        junc1_rel_read_start = self.loc[0] - self.reference_start
+        junc2_rel_read_start = self.loc[1] - self.reference_start
         junction_cigar1 = ''
         junction_cigar2 = ''
         ref_index = -1
@@ -111,11 +121,11 @@ class JWR_class:
                 junction_cigar1 +=  i
             if  ref_index >= junc1_rel_read_start \
                     and min(junc2_rel_read_start + half_motif_size,
-                        self.read.reference_end - self.read.reference_start) \
+                        self.reference_end - self.reference_start) \
                     and i != 'N':
                 junction_cigar1 +=  i
             if ref_index >= min(junc2_rel_read_start + half_motif_size,
-                                    self.read.reference_end - self.read.reference_start):
+                                    self.reference_end - self.reference_start):
                 break
         return junction_cigar1[-25:] + junction_cigar1[:25]
     def get_junc_map_quality(self,cigar):
@@ -177,10 +187,8 @@ class JWR_class:
 class JWR_checker_param:
     def __init__(self, arg = sys.argv):
         self.arg = arg
-            argv = sys.argv
-        
         try: 
-            opts, args = getopt.getopt(argv[1:],"hw:",
+            opts, args = getopt.getopt(arg[1:],"hw:",
                         ["help", 
                          "window=",
                          "chrID=",
@@ -193,19 +201,19 @@ class JWR_checker_param:
 
         # DEFAULT VALUE
         self.junc_cigar_win = 25
-        self.bamfile, self_outfile = args
+        self.bamfile, self.outfile = args
         self.chrID, self.g_loc = None, None
 
 
         for opt, arg in opts:
-            if opt in ("-h", "--help"):                                                                                                            ('-h', "--help"):
+            if opt in ("-h", "--help"):
                 print_help()
                 sys.exit(0)
             elif opt in ("-w", "--window"):
                 self.junc_cigar_win = int(arg)
-            elif opt == "chrID=":
+            elif opt == "--chrID":
                 self.chrID = arg
-            elif opt == "genome-loc=":
+            elif opt == "--genome-loc":
                 self.g_loc =\
                     tuple([int(i) for i in arg.split('-')])
 
@@ -224,17 +232,119 @@ class JWR_checker_param:
 
         print(textwrap.dedent(help_message))
 
+
+
+def tqdm_parallel_map(executor, fn, *iterables, **kwargs):
+    """
+    Equivalent to executor.map(fn, *iterables),
+    but displays a tqdm-based progress bar.
+    
+    Does not support timeout or chunksize as executor.submit is used internally
+    
+    **kwargs is passed to tqdm.
+    """
+    futures_list = []
+    for iterable in iterables:
+        futures_list += [executor.submit(fn, i) for i in iterable]
+    for f in tqdm(concurrent.futures.as_completed(futures_list), total=len(futures_list), **kwargs):
+        yield f.result()
+
+def get_row(jwr_class_list, junc_cigar_win):
+    d = pd.DataFrame(
+        {'id': [jwr.qname for jwr in jwr_class_list],
+             'chrID': [jwr.chrID for jwr in jwr_class_list],
+             'loc': [jwr.loc for jwr in jwr_class_list], 
+             'JAQ': [jwr.get_JAQ(junc_cigar_win) for jwr in jwr_class_list]
+            })
+    return d
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
 def main():
     param = JWR_checker_param()
     algn_file = pysam.AlignmentFile(param.bamfile)
-    reads_fetch = algn_file.fetch(param.chrID,
-                                    param.g_loc[0], 
-                                    param.g_loc[1])
+    reads_fetch = algn_file.fetch()
+    # reads_fetch = algn_file.fetch(param.chrID,
+    #                                 param.g_loc[0], 
+    #                                 param.g_loc[1])
     JWR_fetch = JWR_from_reads(reads_fetch)
-    JWRs = JWR_fetch.get_JWR()
+    JWRs = list(JWR_fetch.get_JWR())
+    print(len(JWRs))
 
-    for JWR in JWRs:
-        JWR.get_JAQ(param.junc_cigar_win)
+    executor = concurrent.futures.ProcessPoolExecutor(mp.cpu_count()-1)    
+    futures = [executor.submit(get_row, jwr, param.junc_cigar_win) for jwr in chunks(JWRs, 500)]
+
+    pbar = tqdm(total = len(JWRs))
+    for future in as_completed(futures):   
+        pbar.update(1)
+
+    d = pd.concat([x.result() for x in futures])
+
+    d.to_hdf(param.outfile, 'data')
+    d.to_csv(param.outfile + ".csv")
+
+    # d = pd.concat(list(
+    #     tqdm_parallel_map(
+    #         executor,
+    #         lambda jwr: pd.DataFrame(
+    #                     [[jwr.read.qname,
+    #                         jwr.chrID,
+    #                         jwr.loc, 
+    #                         jwr.get_JAQ(param.junc_cigar_win)]],
+    #                     columns = ['id', 'chrID' ,'loc', 'JAQ']), 
+    #         JWR_fetch.get_JWR()
+    #     )))
+            
+    #         [
+    #         pd.DataFrame([[jwr.read.qname,
+    #                        jwr.chrID,
+    #                        jwr.loc, 
+    #                        jwr.get_JAQ(param.junc_cigar_win)]],
+    #     columns = ['id', 'chrID' ,'loc', 'JAQ'])], ignore_index=True)
+    #     pass
+    # d = pd.DataFrame(columns = ['id', 'chrID' ,'loc', 'JAQ'])
+    # ids = []
+    # chrIDs = []
+    # locs = []
+    # jaqs = []
+
+    # for jwr in tqdm(JWR_fetch.get_JWR()):
+    #     ids.append(jwr.read.qname)
+    #     chrIDs.append(jwr.chrID)
+    #     locs.append(jwr.loc)
+    #     jaqs.append(jwr.get_JAQ(param.junc_cigar_win))
+        
+    # d = pd.DataFrame(
+    #     {'id': ids,
+    #      'chrID': chrIDs ,
+    #      'loc': locs, 
+    #      'JAQ':jaqs
+    #     }
+    # )
+    # d = pd.concat([d, 
+    #         pd.DataFrame([[jwr.read.qname,
+    #                        jwr.chrID,
+    #                        jwr.loc, 
+    #                        jwr.get_JAQ(param.junc_cigar_win)]],
+    #     columns = ['id', 'chrID' ,'loc', 'JAQ'])], ignore_index=True)
+    #     pass
+
+    # d.to_hdf(param.outfile, 'data')
+    # d.to_csv(param.outfile + ".csv")
 
 if __name__ == "__main__":
     main()
+
+
+
+# reads_fetch = algn_file.fetch()
+# JWR_fetch = JWR_from_reads(reads_fetch)
+# JWRs = list(JWR_fetch.get_JWR())
+# len(JWRs)
+# executor = concurrent.futures.ProcessPoolExecutor(mp.cpu_count()-1)
+# futures = [executor.submit(JWR_class.get_JAQ, jwr) for jwr in JWRs[:3]]
+# futures[0].result()

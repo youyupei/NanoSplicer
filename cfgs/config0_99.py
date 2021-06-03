@@ -18,7 +18,7 @@ DIST_SD = 0
 SAVE_DATA = False
 
 # wavelet denoising level (0 if wavelet is not applying)
-WAVELET_DENOISE = True
+WAVELET_DENOISE = False
 # WAVELET_LEVEL = 3 
 # np.ceil(np.log(len(squiggle)))
 
