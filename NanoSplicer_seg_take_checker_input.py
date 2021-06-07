@@ -300,7 +300,7 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
 
         candidate_motif, motif_start, motif_end, candidate_preference = \
                 candidate_motif_generator(jwr.chrID, candidate_tuples, 
-                                          flank_size, ref_FastaFile, pattern_preference = True)
+                                          flank_size, ref_FastaFile, pattern_preference = PATTERN_PREFERENCE)
         candidate_preference = np.array(candidate_preference)
         
         if not candidate_motif:# or len(candidate_motif) == 1:  

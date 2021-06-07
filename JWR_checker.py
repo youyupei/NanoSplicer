@@ -91,6 +91,7 @@ class JWR_class:
         self.reference_end =read.reference_end
         self.loc = loc
         self.chrID = chrID
+        self.mapq = read.mapping_quality
     def get_JAQ(self, half_motif_size=25):
         '''
         Report the junction alignment quality
@@ -252,6 +253,7 @@ def tqdm_parallel_map(executor, fn, *iterables, **kwargs):
 def get_row(jwr_class_list, junc_cigar_win):
     d = pd.DataFrame(
         {'id': [jwr.qname for jwr in jwr_class_list],
+             'mapQ': [jwr.mapq for jwr in jwr_class_list],
              'chrID': [jwr.chrID for jwr in jwr_class_list],
              'loc': [jwr.loc for jwr in jwr_class_list], 
              'JAQ': [jwr.get_JAQ(junc_cigar_win) for jwr in jwr_class_list]
@@ -287,64 +289,12 @@ def main():
     d.to_hdf(param.outfile, 'data')
     d.to_csv(param.outfile + ".csv")
 
-    # d = pd.concat(list(
-    #     tqdm_parallel_map(
-    #         executor,
-    #         lambda jwr: pd.DataFrame(
-    #                     [[jwr.read.qname,
-    #                         jwr.chrID,
-    #                         jwr.loc, 
-    #                         jwr.get_JAQ(param.junc_cigar_win)]],
-    #                     columns = ['id', 'chrID' ,'loc', 'JAQ']), 
-    #         JWR_fetch.get_JWR()
-    #     )))
-            
-    #         [
-    #         pd.DataFrame([[jwr.read.qname,
-    #                        jwr.chrID,
-    #                        jwr.loc, 
-    #                        jwr.get_JAQ(param.junc_cigar_win)]],
-    #     columns = ['id', 'chrID' ,'loc', 'JAQ'])], ignore_index=True)
-    #     pass
-    # d = pd.DataFrame(columns = ['id', 'chrID' ,'loc', 'JAQ'])
-    # ids = []
-    # chrIDs = []
-    # locs = []
-    # jaqs = []
-
-    # for jwr in tqdm(JWR_fetch.get_JWR()):
-    #     ids.append(jwr.read.qname)
-    #     chrIDs.append(jwr.chrID)
-    #     locs.append(jwr.loc)
-    #     jaqs.append(jwr.get_JAQ(param.junc_cigar_win))
-        
-    # d = pd.DataFrame(
-    #     {'id': ids,
-    #      'chrID': chrIDs ,
-    #      'loc': locs, 
-    #      'JAQ':jaqs
-    #     }
-    # )
-    # d = pd.concat([d, 
-    #         pd.DataFrame([[jwr.read.qname,
-    #                        jwr.chrID,
-    #                        jwr.loc, 
-    #                        jwr.get_JAQ(param.junc_cigar_win)]],
-    #     columns = ['id', 'chrID' ,'loc', 'JAQ'])], ignore_index=True)
-    #     pass
-
-    # d.to_hdf(param.outfile, 'data')
-    # d.to_csv(param.outfile + ".csv")
-
 if __name__ == "__main__":
     main()
 
 
 
-# reads_fetch = algn_file.fetch()
-# JWR_fetch = JWR_from_reads(reads_fetch)
-# JWRs = list(JWR_fetch.get_JWR())
-# len(JWRs)
-# executor = concurrent.futures.ProcessPoolExecutor(mp.cpu_count()-1)
-# futures = [executor.submit(JWR_class.get_JAQ, jwr) for jwr in JWRs[:3]]
-# futures[0].result()
+
+
+
+
