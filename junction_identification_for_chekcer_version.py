@@ -179,13 +179,19 @@ def candidate_motif_generator(chrID, candidates_tuple,
         return None, None, None, None
     
     # candidate preference
-    prefer_pattern = [0] * len(candidates_tuple)
+    prefer_pattern = [1] * len(candidates_tuple)
     if pattern_preference:
-        for i in range(len(candidates)):
-            start, end = candidates[i]
-            if ref_FastaFile.fetch(chrID, start, start + 3).upper() in ['GTA', 'GTG', "CTA", 'CTG']:
+        for i in range(len(candidates_tuple)):
+            start, end = candidates_tuple[i]
+            start_3 = ref_FastaFile.fetch(chrID, start, start + 3).upper()
+            end_3 = ref_FastaFile.fetch(chrID, end -3, end).upper()
+            if start_3[:2] +  end_3[-2:] != "GTAG" and \
+                start_3[:2] +  end_3[-2:] != "CTAC":
+                prefer_pattern[i] -= 1
+                continue
+            if start_3 in ['GTA', 'GTG', "CTA", 'CTG']:
                 prefer_pattern[i] += 1
-            if ref_FastaFile.fetch(chrID, end -3, end).upper() in ['CAG', 'TAG', "CAC", 'TAC']:
+            if end_3 in ['CAG', 'TAG', "CAC", 'TAC']:
                 prefer_pattern[i] += 1
 
     motif_start_pos = min([x[0] for x in candidates_tuple]) - flank_size

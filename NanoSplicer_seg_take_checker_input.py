@@ -300,7 +300,7 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
 
         candidate_motif, motif_start, motif_end, candidate_preference = \
                 candidate_motif_generator(jwr.chrID, candidate_tuples, 
-                                          flank_size, ref_FastaFile, pattern_preference = False)
+                                          flank_size, ref_FastaFile, pattern_preference = True)
         candidate_preference = np.array(candidate_preference)
         
         if not candidate_motif:# or len(candidate_motif) == 1:  
@@ -806,54 +806,22 @@ def run_multifast5(fast5_path, plot_df, AlignmentFile, ref_FastaFile,
                 segment_Si = [np.mean(x) for x in even_logL_list]
                 worst_even_logL_list = [sorted(x)[0] for x in even_logL_list]
 
-                if IS_SEQUINS_DATA:
-                    f = open(output_file+'.tsv', "a")
-                    #fcntl.flock(f,fcntl.LOCK_EX)
-                    f.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                        jwr.id,
-                        str(jwr.loc),
-                        jwr.JAQ,
-                        ','.join([str(x)+','+str(y) for x,y in candidate_tuples]),
-                        index_m,
-                        ','.join([str(x) for x in candidate_preference]),
-                        ','.join([str(x) for x in segment_Si]),
-                        ','.join([str(x) for x in dist_seg_logLR]),
-                        ','.join([str(x) for x in post_prob]),
-                        ','.join([str(x) for x in post_prob_prior])
-                        ))
-                        # fcntl.flock(f,fcntl.LOCK_UN)
-                    f.close()
-
-
-                else:
-                    f = open(output_file+'.tsv', "a")
-                    fcntl.flock(f,fcntl.LOCK_EX)
-                    f.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                        str(row.id),
-                        str(row.site_minimap),
-                        str(row.site_NanoSplicer),
-                        str(row.minimap),
-                        str(row.NanoSplicer),
-                        str(row.S_i),
-                        ','.join([str(x) for x in row.junc_supported]),
-                        str(row.num_cand),
-                        ','.join([str(x) for x in row.candidates]),
-                        ','.join([str(x) for x in row.candidate_preference]),
-                        str(row.junc_id),
-                        str(junction_cigar),
-                        str(junction_alignment_quality),
-                        ','.join([str(x) for x in p_wise_Si]),
-                        ','.join([str(x) for x in segment_Si]),
-                        ','.join([str(x) for x in n_of_aligned_event]),
-                        ','.join([str(x) for x in worst_even_logL_list]),
-                        ','.join([str(x) for x in dist_seg_logLR]),
-                        ','.join([str(len(x)) for x in dist_seg_logLR_individual]),
-                        ','.join([str(x) for x in post_prob]),
-                        ','.join([str(x) for x in post_prob_prior]),
-                        str(sd_of_median)
-                        ))
-                        # fcntl.flock(f,fcntl.LOCK_UN)
-                    f.close()
+                f = open(output_file+'.tsv', "a")
+                #fcntl.flock(f,fcntl.LOCK_EX)
+                f.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                    jwr.id,
+                    str(jwr.loc),
+                    jwr.JAQ,
+                    ','.join([str(x)+','+str(y) for x,y in candidate_tuples]),
+                    index_m,
+                    ','.join([str(x) for x in candidate_preference]),
+                    ','.join([str(x) for x in segment_Si]),
+                    ','.join([str(x) for x in dist_seg_logLR]),
+                    ','.join([str(x) for x in post_prob]),
+                    ','.join([str(x) for x in post_prob_prior])
+                    ))
+                    # fcntl.flock(f,fcntl.LOCK_UN)
+                f.close()
     return failed_jwr
 
 def get_gaps_in_read(AlignedSegment):

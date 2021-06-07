@@ -1,9 +1,9 @@
 import scipy.stats
 
 # CHROMOSOME_NAME (temp)
-#CHROMOSOME_NAME = "NC_000001.11"
-CHROMOSOME_NAME = "chrIS"
-IS_SEQUINS_DATA = True
+CHROMOSOME_NAME = "NC_000001.11"
+#CHROMOSOME_NAME = "chrIS"
+#IS_SEQUINS_DATA = True
 
 # truncated quantile
 QUANTILE = 0.99
